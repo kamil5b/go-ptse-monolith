@@ -8,6 +8,7 @@
 - [ ] Authentication system
 - [ ] Middleware integration
 - [ ] Utilize Request & Response models
+- [ ] Unit Test
 - [ ] Redis integration
 - [ ] Worker support: Asynq, RabbitMQ, Redpanda
 - [ ] Storage support: S3-Compatible, GCS, MinIO, Local, etc 
