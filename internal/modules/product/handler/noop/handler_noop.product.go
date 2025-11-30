@@ -1,4 +1,4 @@
-package product
+package noop
 
 import (
 	"go-modular-monolith/internal/domain/product"

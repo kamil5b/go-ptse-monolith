@@ -20,9 +20,12 @@ func NewEchoServer(c *core.Container) *echo.Echo {
 		c.ProductHandler,
 	)
 	for _, route := range *routes {
-		v1 = transportEcho.AppRoutesToEchoRoutes(v1, &route, func(c echo.Context) product.Context {
-			return transportEcho.NewEchoContext(c)
-		}).Group("")
+		switch route.Handler.(type) {
+		case func(product.Context) error:
+			v1 = transportEcho.AdapterToEchoRoutes(v1, &route, func(c echo.Context) product.Context {
+				return transportEcho.NewEchoContext(c)
+			}).Group("")
+		}
 	}
 	return e
 }

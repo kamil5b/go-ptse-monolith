@@ -1,4 +1,4 @@
-package product
+package v1
 
 import (
 	"go-modular-monolith/internal/domain/product"

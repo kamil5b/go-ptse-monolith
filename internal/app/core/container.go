@@ -6,10 +6,10 @@ import (
 	repoMongo "go-modular-monolith/internal/modules/product/repository/mongo"
 	repoSQL "go-modular-monolith/internal/modules/product/repository/sql"
 
-	serviceUnimplemented "go-modular-monolith/internal/modules/product/service/unimplemented"
+	serviceUnimplemented "go-modular-monolith/internal/modules/product/service/noop"
 	serviceV1 "go-modular-monolith/internal/modules/product/service/v1"
 
-	handlerUnimplemented "go-modular-monolith/internal/modules/product/handler/unimplemented"
+	handlerUnimplemented "go-modular-monolith/internal/modules/product/handler/noop"
 	handlerV1 "go-modular-monolith/internal/modules/product/handler/v1"
 
 	"github.com/jmoiron/sqlx"

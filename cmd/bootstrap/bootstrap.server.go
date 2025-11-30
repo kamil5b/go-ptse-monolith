@@ -51,12 +51,12 @@ func RunServer() error {
 	}
 
 	switch featureFlag.HTTPHandler {
-	case "echo":
-		server := appHttp.NewEchoServer(container)
-		if err := server.Start(":" + cfg.App.Server.Port); err != nil {
+	case "gin":
+		server := appHttp.NewGinServer(container)
+		if err := server.Run(":" + cfg.App.Server.Port); err != nil {
 			return err
 		}
-	default:
+	default: //default to echo
 		server := appHttp.NewEchoServer(container)
 		if err := server.Start(":" + cfg.App.Server.Port); err != nil {
 			return err
