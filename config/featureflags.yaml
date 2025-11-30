@@ -1,0 +1,13 @@
+http_handler: echo
+
+handler:
+  authentication: v1
+  product: v1
+
+service:
+  authentication: v1
+  product: v1
+
+repository:
+  authentication: postgres
+  product: postgres

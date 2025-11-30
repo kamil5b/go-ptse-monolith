@@ -1,0 +1,16 @@
+environment: development
+
+app:
+  server:
+    port: "8080"
+    grpc_port: "9090"
+
+  database:
+    sql:
+      db_url: "postgres://user:pass@localhost:5432/dbname?sslmode=disable"
+    mongo:
+      mongo_url: "mongodb://localhost:27017"
+      mongo_db: "myapp_db"
+
+  jwt:
+    secret: "supersecretkey"
