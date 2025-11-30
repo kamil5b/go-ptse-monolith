@@ -12,8 +12,8 @@ func NewUnimplementedService() *UnimplementedService {
 	return &UnimplementedService{}
 }
 
-func (s *UnimplementedService) Create(_ context.Context, _ *product.Product) error {
-	return errors.New("not implemented")
+func (s *UnimplementedService) Create(_ context.Context, _ *product.CreateProductRequest, _ string) (*product.Product, error) {
+	return nil, errors.New("not implemented")
 }
 func (s *UnimplementedService) Get(_ context.Context, _ string) (*product.Product, error) {
 	return nil, errors.New("not implemented")
@@ -21,8 +21,8 @@ func (s *UnimplementedService) Get(_ context.Context, _ string) (*product.Produc
 func (s *UnimplementedService) List(_ context.Context) ([]product.Product, error) {
 	return nil, errors.New("not implemented")
 }
-func (s *UnimplementedService) Update(_ context.Context, _ *product.Product) error {
-	return errors.New("not implemented")
+func (s *UnimplementedService) Update(_ context.Context, _ *product.UpdateProductRequest, _ string) (*product.Product, error) {
+	return nil, errors.New("not implemented")
 }
 func (s *UnimplementedService) Delete(_ context.Context, _ string, _ string) error {
 	return errors.New("not implemented")

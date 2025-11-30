@@ -3,7 +3,6 @@ package v1
 import (
 	"go-modular-monolith/internal/domain/product"
 	"net/http"
-	"time"
 )
 
 type Handler struct {
@@ -15,20 +14,17 @@ func NewHandler(s product.ProductService) *Handler {
 }
 
 func (h *Handler) Create(c product.Context) error {
-	var req product.Product
+	var req product.CreateProductRequest
 	ctx := c.GetContext()
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
-	if uid := c.Get("user_id"); uid != nil {
-		if s, ok := uid.(string); ok {
-			req.CreatedBy = s
-		}
-	}
-	if err := h.svc.Create(ctx, &req); err != nil {
+	createdBy := c.GetUserID()
+	p, err := h.svc.Create(ctx, &req, createdBy)
+	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err.Error())
 	}
-	return c.JSON(http.StatusCreated, req)
+	return c.JSON(http.StatusCreated, p)
 }
 
 func (h *Handler) Get(c product.Context) error {
@@ -53,22 +49,17 @@ func (h *Handler) List(c product.Context) error {
 func (h *Handler) Update(c product.Context) error {
 	ctx := c.GetContext()
 	id := c.Param("id")
-	var req product.Product
+	var req product.UpdateProductRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
 	req.ID = id
-	if uid := c.Get("user_id"); uid != nil {
-		if s, ok := uid.(string); ok {
-			req.UpdatedBy = &s
-		}
-	}
-	now := time.Now().UTC()
-	req.UpdatedAt = &now
-	if err := h.svc.Update(ctx, &req); err != nil {
+	updatedBy := c.GetUserID()
+	p, err := h.svc.Update(ctx, &req, updatedBy)
+	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err.Error())
 	}
-	return c.JSON(http.StatusOK, req)
+	return c.JSON(http.StatusOK, p)
 }
 
 func (h *Handler) Delete(c product.Context) error {

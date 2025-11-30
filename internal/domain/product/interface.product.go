@@ -26,11 +26,11 @@ type ProductHandler interface {
 }
 
 type ProductService interface {
-	Create(ctx context.Context, p *Product) error
-	Get(ctx context.Context, p string) (*Product, error)
+	Create(ctx context.Context, req *CreateProductRequest, createdBy string) (*Product, error)
+	Get(ctx context.Context, id string) (*Product, error)
 	List(ctx context.Context) ([]Product, error)
-	Update(ctx context.Context, p *Product) error
-	Delete(ctx context.Context, id, by string) error
+	Update(ctx context.Context, req *UpdateProductRequest, updatedBy string) (*Product, error)
+	Delete(ctx context.Context, id, deletedBy string) error
 }
 
 type ProductRepository interface {
