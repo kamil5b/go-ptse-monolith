@@ -3,10 +3,12 @@ package core
 import (
 	"go-modular-monolith/internal/domain/auth"
 	"go-modular-monolith/internal/domain/product"
+	"go-modular-monolith/internal/domain/uow"
 	"go-modular-monolith/internal/domain/user"
 
 	repoMongo "go-modular-monolith/internal/modules/product/repository/mongo"
 	repoSQL "go-modular-monolith/internal/modules/product/repository/sql"
+	"go-modular-monolith/internal/modules/unitofwork"
 
 	serviceUnimplemented "go-modular-monolith/internal/modules/product/service/noop"
 	serviceV1 "go-modular-monolith/internal/modules/product/service/v1"
@@ -62,22 +64,26 @@ func NewContainer(
 		authService       auth.AuthService
 		authHandler       auth.AuthHandler
 		authMiddleware    *middleware.AuthMiddleware
+		unitOfWork        uow.UnitOfWork
 	)
 
 	// repo
 	switch featureFlag.Repository.Product {
 	case "mongo":
-		productRepository = repoMongo.NewMongoRepository(mongoClient, "appdb")
+		productRepository = repoMongo.NewMongoRepository(mongoClient, config.App.Database.Mongo.MongoDB)
 	case "postgres":
 		productRepository = repoSQL.NewSQLRepository(db)
 	default:
 		// productRepository = repoUnimplemented.NewUnimplementedRepository()
 	}
 
+	// uow
+	unitOfWork = unitofwork.NewDefaultUnitOfWork(db, mongoClient)
+
 	// service
 	switch featureFlag.Service.Product {
 	case "v1":
-		productService = serviceV1.NewServiceV1(productRepository)
+		productService = serviceV1.NewServiceV1(productRepository, unitOfWork)
 	default:
 		productService = serviceUnimplemented.NewUnimplementedService()
 	}

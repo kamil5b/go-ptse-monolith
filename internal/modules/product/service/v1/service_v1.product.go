@@ -3,17 +3,21 @@ package v1
 import (
 	"context"
 	"go-modular-monolith/internal/domain/product"
+	"go-modular-monolith/internal/domain/uow"
 	"time"
 )
 
 type ServiceV1 struct {
 	repo product.ProductRepository
+	uow  uow.UnitOfWork
 }
 
-func NewServiceV1(r product.ProductRepository) *ServiceV1 { return &ServiceV1{repo: r} }
+func NewServiceV1(r product.ProductRepository, u uow.UnitOfWork) *ServiceV1 {
+	return &ServiceV1{repo: r, uow: u}
+}
 
 func (s *ServiceV1) Create(ctx context.Context, req *product.CreateProductRequest, createdBy string) (*product.Product, error) {
-	ctx = s.repo.StartContext(ctx)
+	ctx = s.uow.StartContext(ctx)
 	var p product.Product
 	p.Name = req.Name
 	p.Description = req.Description
@@ -21,7 +25,7 @@ func (s *ServiceV1) Create(ctx context.Context, req *product.CreateProductReques
 	p.CreatedBy = createdBy
 	err := s.repo.Create(ctx, &p)
 	if err != nil {
-		s.repo.DeferErrorContext(ctx, err)
+		s.uow.DeferErrorContext(ctx, err)
 		return nil, err
 	}
 	return &p, nil
@@ -48,7 +52,7 @@ func (s *ServiceV1) Update(ctx context.Context, req *product.UpdateProductReques
 	p.UpdatedBy = &updatedBy
 	err = s.repo.Update(ctx, p)
 	if err != nil {
-		s.repo.DeferErrorContext(ctx, err)
+		s.uow.DeferErrorContext(ctx, err)
 		return nil, err
 	}
 	return p, nil

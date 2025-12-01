@@ -3,6 +3,8 @@ package product
 import (
 	"context"
 	"go-modular-monolith/internal/domain/product"
+	"go-modular-monolith/pkg/constant"
+	"go-modular-monolith/pkg/util"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,27 +21,8 @@ func NewSQLRepository(db *sqlx.DB) *SQLRepository {
 	return &SQLRepository{db: db}
 }
 
-func (r *SQLRepository) StartContext(ctx context.Context) context.Context {
-	tx := r.db.MustBeginTx(ctx, nil)
-	return context.WithValue(ctx, driverName, tx)
-}
-func (r *SQLRepository) DeferErrorContext(ctx context.Context, err error) {
-	tx := r.getTxFromContext(ctx)
-	if tx != nil {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}
-}
 func (r *SQLRepository) getTxFromContext(ctx context.Context) *sqlx.Tx {
-	txVal := ctx.Value(driverName)
-	tx, ok := txVal.(*sqlx.Tx)
-	if !ok {
-		return nil
-	}
-	return tx
+	return util.GetObjectFromContext[sqlx.Tx](ctx, constant.ContextKeyPostgresTx)
 }
 
 func (r *SQLRepository) Create(ctx context.Context, p *product.Product) error {

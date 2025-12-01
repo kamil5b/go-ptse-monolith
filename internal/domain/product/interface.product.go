@@ -34,9 +34,6 @@ type ProductService interface {
 }
 
 type ProductRepository interface {
-	StartContext(ctx context.Context) context.Context
-	DeferErrorContext(ctx context.Context, err error)
-
 	Create(ctx context.Context, p *Product) error
 	GetByID(ctx context.Context, id string) (*Product, error)
 	List(ctx context.Context) ([]Product, error)
