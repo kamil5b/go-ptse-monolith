@@ -11,9 +11,12 @@ A production-ready, modular monolithic application built with Go implementing cl
 - 🗄️ **Multiple Database Backends** - PostgreSQL and MongoDB support per module
 - 🔐 **Complete Authentication** - JWT, Session-based, and Basic Auth
 - 🛡️ **Middleware Support** - Authentication, authorization, and role-based access
-- 📦 **Modular Architecture** - Independent versioning for handlers, services, and repositories
+- 📦 **Modular Architecture** - Domain-per-module with isolated boundaries
 - 🎛️ **Feature Flags** - Enable/disable features through configuration
 - 🔄 **Database Migrations** - Goose (SQL) and mongosh (MongoDB)
+- 🧩 **Shared Kernel** - Events, Errors, Context, UoW, Validator
+- 🔗 **Anti-Corruption Layer** - Clean cross-module communication via ACL
+- 🔍 **Dependency Linter** - Enforces module isolation rules
 
 ## Quick Start
 
@@ -98,14 +101,27 @@ repository:
 
 ```
 go-modular-monolith/
-├── cmd/bootstrap/          # Application bootstrapping
+├── cmd/
+│   ├── bootstrap/          # Application bootstrapping
+│   └── lint-deps/          # Dependency linter tool
 ├── config/                 # Configuration files
 ├── docs/                   # Documentation
 ├── internal/
 │   ├── app/               # Application core (DI, config, HTTP setup)
-│   ├── domain/            # Domain models and interfaces
 │   ├── infrastructure/    # Database connections, external services
 │   ├── modules/           # Business modules (auth, product, user)
+│   │   └── <module>/
+│   │       ├── domain/    # Module's private domain types
+│   │       ├── acl/       # Anti-Corruption Layer adapters
+│   │       ├── handler/   # HTTP handlers (v1, noop)
+│   │       ├── service/   # Business logic (v1, noop)
+│   │       └── repository/# Data access (sql, mongo, noop)
+│   ├── shared/            # Shared kernel (cross-cutting concerns)
+│   │   ├── context/       # Framework-agnostic HTTP context
+│   │   ├── errors/        # Domain error types
+│   │   ├── events/        # Event bus for inter-module communication
+│   │   ├── uow/           # Unit of Work interface
+│   │   └── validator/     # Request validation
 │   └── transports/        # HTTP framework adapters
 └── pkg/                   # Shared utilities
 ```
@@ -173,6 +189,10 @@ For detailed documentation, see [Technical Documentation](docs/TECHNICAL_DOCUMEN
 - [x] Echo & Gin framework integration
 - [x] Authentication (JWT, Session, Basic Auth)
 - [x] Middleware integration
+- [x] Shared Kernel (Events, Errors, Context, UoW)
+- [x] Domain-per-Module Pattern
+- [x] Anti-Corruption Layer (ACL)
+- [x] Dependency Linter
 - [ ] Unit Tests
 - [ ] Redis caching
 - [ ] Worker support (Asynq, RabbitMQ)
@@ -187,6 +207,8 @@ For detailed documentation, see [Technical Documentation](docs/TECHNICAL_DOCUMEN
 3. Implement both PostgreSQL and MongoDB repositories when applicable
 4. Add migrations for database schema changes
 5. Update documentation for significant changes
+6. **Run dependency linter before committing**: `go run cmd/lint-deps/main.go`
+7. Use ACL pattern for cross-module communication
 
 ## License
 
