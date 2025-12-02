@@ -3,14 +3,14 @@ package nethttp
 import (
 	"net/http"
 
-	"go-modular-monolith/pkg/routes"
+	transportHTTP "go-modular-monolith/internal/transports/http"
 
 	"github.com/gorilla/mux"
 )
 
 func AdapterToNetHTTPRoutes[T any](
 	r *mux.Router,
-	route *routes.Route,
+	route *transportHTTP.Route,
 	domainContext func(http.ResponseWriter, *http.Request) T,
 ) *mux.Router {
 	handler := func(w http.ResponseWriter, req *http.Request) {

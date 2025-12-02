@@ -14,7 +14,6 @@ require (
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/lib/pq v1.10.9
 	github.com/pressly/goose/v3 v3.11.0
-	github.com/rs/zerolog v1.34.0
 	github.com/valyala/fasthttp v1.68.0
 	go.mongodb.org/mongo-driver v1.17.6
 	golang.org/x/crypto v0.43.0

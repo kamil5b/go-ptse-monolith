@@ -2,8 +2,7 @@ package unitofwork
 
 import (
 	"context"
-	"go-modular-monolith/pkg/constant"
-	"go-modular-monolith/pkg/util"
+	sharedCtx "go-modular-monolith/internal/shared/context"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -18,11 +17,11 @@ func NewSQLUnitOfWork(db *sqlx.DB) *SQLUnitOfWork {
 
 func (r *SQLUnitOfWork) StartContext(ctx context.Context) context.Context {
 	tx := r.db.MustBeginTx(ctx, nil)
-	return context.WithValue(ctx, constant.ContextKeyPostgresTx, &tx)
+	return context.WithValue(ctx, sharedCtx.PostgresTxKey, &tx)
 }
 
 func (r *SQLUnitOfWork) DeferErrorContext(ctx context.Context, err error) error {
-	tx := util.GetObjectFromContext[sqlx.Tx](ctx, constant.ContextKeyPostgresTx)
+	tx := sharedCtx.GetObjectFromContext[sqlx.Tx](ctx, sharedCtx.PostgresTxKey)
 	if tx != nil {
 		if err != nil {
 			return tx.Rollback()

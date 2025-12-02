@@ -1,14 +1,14 @@
 package gin
 
 import (
-	"go-modular-monolith/pkg/routes"
+	transportHTTP "go-modular-monolith/internal/transports/http"
 
 	"github.com/gin-gonic/gin"
 )
 
 func AdapterToGinRoutes[T any](
 	r *gin.RouterGroup,
-	route *routes.Route,
+	route *transportHTTP.Route,
 	domainContext func(*gin.Context) T,
 ) *gin.RouterGroup {
 	handler := func(ctx *gin.Context) {

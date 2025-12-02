@@ -5,7 +5,7 @@ import (
 	"go-modular-monolith/internal/modules/auth/middleware"
 	productdomain "go-modular-monolith/internal/modules/product/domain"
 	userdomain "go-modular-monolith/internal/modules/user/domain"
-	"go-modular-monolith/pkg/routes"
+	"go-modular-monolith/internal/transports/http"
 )
 
 // MiddlewareFunc is a generic middleware function type
@@ -16,8 +16,8 @@ func NewRoutes(
 	userHandler userdomain.Handler,
 	authHandler authdomain.Handler,
 	authMiddleware *middleware.AuthMiddleware,
-) *[]routes.Route {
-	return &[]routes.Route{
+) *[]http.Route {
+	return &[]http.Route{
 		// Auth routes (public - no middleware)
 		{
 			Method:  "POST",

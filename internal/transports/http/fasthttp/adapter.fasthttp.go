@@ -1,7 +1,7 @@
 package fasthttp
 
 import (
-	"go-modular-monolith/pkg/routes"
+	transportHTTP "go-modular-monolith/internal/transports/http"
 
 	"github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"
@@ -9,7 +9,7 @@ import (
 
 func AdapterToFastHTTPRoutes[T any](
 	r *router.Group,
-	route *routes.Route,
+	route *transportHTTP.Route,
 	domainContext func(*fasthttp.RequestCtx) T,
 ) *router.Group {
 	handler := func(ctx *fasthttp.RequestCtx) {

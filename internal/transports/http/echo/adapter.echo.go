@@ -1,14 +1,14 @@
 package echo
 
 import (
-	"go-modular-monolith/pkg/routes"
+	transportHTTP "go-modular-monolith/internal/transports/http"
 
 	"github.com/labstack/echo/v4"
 )
 
 func AdapterToEchoRoutes[T any](
 	e *echo.Group,
-	route *routes.Route,
+	route *transportHTTP.Route,
 	domainContext func(echo.Context) T,
 ) *echo.Group {
 	handler := func(ctx echo.Context) error {

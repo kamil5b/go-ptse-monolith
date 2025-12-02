@@ -2,8 +2,7 @@ package unitofwork
 
 import (
 	"context"
-	"go-modular-monolith/pkg/constant"
-	"go-modular-monolith/pkg/util"
+	sharedCtx "go-modular-monolith/internal/shared/context"
 
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -21,11 +20,11 @@ func (u *MongoUnitOfWork) StartContext(ctx context.Context) context.Context {
 	if err != nil {
 		return ctx
 	}
-	return context.WithValue(ctx, constant.ContextKeyMongoSession, session)
+	return context.WithValue(ctx, sharedCtx.MongoSessionKey, session)
 }
 
 func (u *MongoUnitOfWork) DeferErrorContext(ctx context.Context, err error) error {
-	session := *util.GetObjectFromContext[mongo.Session](ctx, constant.ContextKeyMongoSession)
+	session := *sharedCtx.GetObjectFromContext[mongo.Session](ctx, sharedCtx.MongoSessionKey)
 	if session != nil {
 		defer session.EndSession(ctx)
 		if err != nil {

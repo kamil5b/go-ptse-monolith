@@ -1,14 +1,14 @@
 package fiber
 
 import (
-	"go-modular-monolith/pkg/routes"
+	transportHTTP "go-modular-monolith/internal/transports/http"
 
 	fiberpkg "github.com/gofiber/fiber/v2"
 )
 
 func AdapterToFiberRoutes[T any](
 	r fiberpkg.Router,
-	route *routes.Route,
+	route *transportHTTP.Route,
 	domainContext func(*fiberpkg.Ctx) T,
 ) {
 	handler := func(c *fiberpkg.Ctx) error {

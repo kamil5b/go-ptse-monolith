@@ -2,17 +2,13 @@ package sql
 
 import (
 	"context"
-	"time"
-
 	"go-modular-monolith/internal/modules/product/domain"
-	"go-modular-monolith/pkg/constant"
-	"go-modular-monolith/pkg/util"
+	sharedCtx "go-modular-monolith/internal/shared/context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
-
-const driverName = "PostgreSQL"
 
 type SQLRepository struct {
 	db *sqlx.DB
@@ -23,7 +19,7 @@ func NewSQLRepository(db *sqlx.DB) *SQLRepository {
 }
 
 func (r *SQLRepository) getTxFromContext(ctx context.Context) *sqlx.Tx {
-	return util.GetObjectFromContext[sqlx.Tx](ctx, constant.ContextKeyPostgresTx)
+	return sharedCtx.GetObjectFromContext[sqlx.Tx](ctx, sharedCtx.PostgresTxKey)
 }
 
 func (r *SQLRepository) Create(ctx context.Context, p *domain.Product) error {
