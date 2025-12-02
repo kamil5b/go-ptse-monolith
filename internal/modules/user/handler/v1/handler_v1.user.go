@@ -1,18 +1,19 @@
 package v1
 
 import (
-	"go-modular-monolith/internal/domain/user"
+	"go-modular-monolith/internal/modules/user/domain"
+	sharedctx "go-modular-monolith/internal/shared/context"
 	"net/http"
 )
 
 type Handler struct {
-	svc user.UserService
+	svc domain.Service
 }
 
-func NewHandler(s user.UserService) *Handler { return &Handler{svc: s} }
+func NewHandler(s domain.Service) *Handler { return &Handler{svc: s} }
 
-func (h *Handler) Create(c user.Context) error {
-	var req user.CreateUserRequest
+func (h *Handler) Create(c sharedctx.Context) error {
+	var req domain.CreateUserRequest
 	ctx := c.GetContext()
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, err.Error())
@@ -25,7 +26,7 @@ func (h *Handler) Create(c user.Context) error {
 	return c.JSON(http.StatusCreated, u)
 }
 
-func (h *Handler) Get(c user.Context) error {
+func (h *Handler) Get(c sharedctx.Context) error {
 	ctx := c.GetContext()
 	id := c.Param("id")
 	u, err := h.svc.Get(ctx, id)
@@ -35,7 +36,7 @@ func (h *Handler) Get(c user.Context) error {
 	return c.JSON(http.StatusOK, u)
 }
 
-func (h *Handler) List(c user.Context) error {
+func (h *Handler) List(c sharedctx.Context) error {
 	ctx := c.GetContext()
 	lst, err := h.svc.List(ctx)
 	if err != nil {
@@ -44,10 +45,10 @@ func (h *Handler) List(c user.Context) error {
 	return c.JSON(http.StatusOK, lst)
 }
 
-func (h *Handler) Update(c user.Context) error {
+func (h *Handler) Update(c sharedctx.Context) error {
 	ctx := c.GetContext()
 	id := c.Param("id")
-	var req user.UpdateUserRequest
+	var req domain.UpdateUserRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
@@ -60,7 +61,7 @@ func (h *Handler) Update(c user.Context) error {
 	return c.JSON(http.StatusOK, u)
 }
 
-func (h *Handler) Delete(c user.Context) error {
+func (h *Handler) Delete(c sharedctx.Context) error {
 	ctx := c.GetContext()
 	id := c.Param("id")
 	by := ""

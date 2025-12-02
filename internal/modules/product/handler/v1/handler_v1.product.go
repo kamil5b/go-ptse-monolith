@@ -1,20 +1,21 @@
 package v1
 
 import (
-	"go-modular-monolith/internal/domain/product"
+	"go-modular-monolith/internal/modules/product/domain"
+	sharedctx "go-modular-monolith/internal/shared/context"
 	"net/http"
 )
 
 type Handler struct {
-	svc product.ProductService
+	svc domain.Service
 }
 
-func NewHandler(s product.ProductService) *Handler {
+func NewHandler(s domain.Service) *Handler {
 	return &Handler{svc: s}
 }
 
-func (h *Handler) Create(c product.Context) error {
-	var req product.CreateProductRequest
+func (h *Handler) Create(c sharedctx.Context) error {
+	var req domain.CreateProductRequest
 	ctx := c.GetContext()
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, err.Error())
@@ -27,7 +28,7 @@ func (h *Handler) Create(c product.Context) error {
 	return c.JSON(http.StatusCreated, p)
 }
 
-func (h *Handler) Get(c product.Context) error {
+func (h *Handler) Get(c sharedctx.Context) error {
 	ctx := c.GetContext()
 	id := c.Param("id")
 	p, err := h.svc.Get(ctx, id)
@@ -37,7 +38,7 @@ func (h *Handler) Get(c product.Context) error {
 	return c.JSON(http.StatusOK, p)
 }
 
-func (h *Handler) List(c product.Context) error {
+func (h *Handler) List(c sharedctx.Context) error {
 	ctx := c.GetContext()
 	lst, err := h.svc.List(ctx)
 	if err != nil {
@@ -46,10 +47,10 @@ func (h *Handler) List(c product.Context) error {
 	return c.JSON(http.StatusOK, lst)
 }
 
-func (h *Handler) Update(c product.Context) error {
+func (h *Handler) Update(c sharedctx.Context) error {
 	ctx := c.GetContext()
 	id := c.Param("id")
-	var req product.UpdateProductRequest
+	var req domain.UpdateProductRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, err.Error())
 	}
@@ -62,7 +63,7 @@ func (h *Handler) Update(c product.Context) error {
 	return c.JSON(http.StatusOK, p)
 }
 
-func (h *Handler) Delete(c product.Context) error {
+func (h *Handler) Delete(c sharedctx.Context) error {
 	ctx := c.GetContext()
 	id := c.Param("id")
 	by := ""

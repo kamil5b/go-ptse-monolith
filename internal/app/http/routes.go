@@ -1,10 +1,10 @@
 package http
 
 import (
-	"go-modular-monolith/internal/domain/auth"
-	"go-modular-monolith/internal/domain/product"
-	"go-modular-monolith/internal/domain/user"
+	authdomain "go-modular-monolith/internal/modules/auth/domain"
 	"go-modular-monolith/internal/modules/auth/middleware"
+	productdomain "go-modular-monolith/internal/modules/product/domain"
+	userdomain "go-modular-monolith/internal/modules/user/domain"
 	"go-modular-monolith/pkg/routes"
 )
 
@@ -12,9 +12,9 @@ import (
 type MiddlewareFunc[T any] func(next func(T) error) func(T) error
 
 func NewRoutes(
-	productHandler product.ProductHandler,
-	userHandler user.UserHandler,
-	authHandler auth.AuthHandler,
+	productHandler productdomain.Handler,
+	userHandler userdomain.Handler,
+	authHandler authdomain.Handler,
 	authMiddleware *middleware.AuthMiddleware,
 ) *[]routes.Route {
 	return &[]routes.Route{

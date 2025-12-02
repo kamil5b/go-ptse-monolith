@@ -2,23 +2,26 @@ package v1
 
 import (
 	"context"
-	"go-modular-monolith/internal/domain/product"
-	"go-modular-monolith/internal/domain/uow"
 	"time"
+
+	"go-modular-monolith/internal/modules/product/domain"
+	"go-modular-monolith/internal/shared/events"
+	"go-modular-monolith/internal/shared/uow"
 )
 
 type ServiceV1 struct {
-	repo product.ProductRepository
-	uow  uow.UnitOfWork
+	repo     domain.Repository
+	uow      uow.UnitOfWork
+	eventBus events.EventBus
 }
 
-func NewServiceV1(r product.ProductRepository, u uow.UnitOfWork) *ServiceV1 {
-	return &ServiceV1{repo: r, uow: u}
+func NewServiceV1(r domain.Repository, u uow.UnitOfWork, eb events.EventBus) *ServiceV1 {
+	return &ServiceV1{repo: r, uow: u, eventBus: eb}
 }
 
-func (s *ServiceV1) Create(ctx context.Context, req *product.CreateProductRequest, createdBy string) (*product.Product, error) {
+func (s *ServiceV1) Create(ctx context.Context, req *domain.CreateProductRequest, createdBy string) (*domain.Product, error) {
 	ctx = s.uow.StartContext(ctx)
-	var p product.Product
+	var p domain.Product
 	p.Name = req.Name
 	p.Description = req.Description
 	p.CreatedAt = time.Now().UTC()
@@ -28,15 +31,29 @@ func (s *ServiceV1) Create(ctx context.Context, req *product.CreateProductReques
 		s.uow.DeferErrorContext(ctx, err)
 		return nil, err
 	}
+
+	// Publish event for inter-module communication
+	if s.eventBus != nil {
+		_ = s.eventBus.Publish(ctx, domain.ProductCreatedEvent{
+			ProductID:   p.ID,
+			Name:        p.Name,
+			Description: p.Description,
+			CreatedBy:   createdBy,
+			CreatedAt:   p.CreatedAt,
+		})
+	}
+
+	s.uow.DeferErrorContext(ctx, nil) // Commit transaction
 	return &p, nil
 }
-func (s *ServiceV1) Get(ctx context.Context, id string) (*product.Product, error) {
+func (s *ServiceV1) Get(ctx context.Context, id string) (*domain.Product, error) {
 	return s.repo.GetByID(ctx, id)
 }
-func (s *ServiceV1) List(ctx context.Context) ([]product.Product, error) {
+func (s *ServiceV1) List(ctx context.Context) ([]domain.Product, error) {
 	return s.repo.List(ctx)
 }
-func (s *ServiceV1) Update(ctx context.Context, req *product.UpdateProductRequest, updatedBy string) (*product.Product, error) {
+func (s *ServiceV1) Update(ctx context.Context, req *domain.UpdateProductRequest, updatedBy string) (*domain.Product, error) {
+	ctx = s.uow.StartContext(ctx)
 	p, err := s.repo.GetByID(ctx, req.ID)
 	if err != nil {
 		return nil, err
@@ -55,8 +72,38 @@ func (s *ServiceV1) Update(ctx context.Context, req *product.UpdateProductReques
 		s.uow.DeferErrorContext(ctx, err)
 		return nil, err
 	}
+
+	// Publish event for inter-module communication
+	if s.eventBus != nil {
+		_ = s.eventBus.Publish(ctx, domain.ProductUpdatedEvent{
+			ProductID:   p.ID,
+			Name:        p.Name,
+			Description: p.Description,
+			UpdatedBy:   updatedBy,
+			UpdatedAt:   now,
+		})
+	}
+
+	s.uow.DeferErrorContext(ctx, nil) // Commit transaction
 	return p, nil
 }
 func (s *ServiceV1) Delete(ctx context.Context, id, by string) error {
-	return s.repo.SoftDelete(ctx, id, by)
+	ctx = s.uow.StartContext(ctx)
+	err := s.repo.SoftDelete(ctx, id, by)
+	if err != nil {
+		s.uow.DeferErrorContext(ctx, err)
+		return err
+	}
+
+	// Publish event for inter-module communication
+	if s.eventBus != nil {
+		_ = s.eventBus.Publish(ctx, domain.ProductDeletedEvent{
+			ProductID: id,
+			DeletedBy: by,
+			DeletedAt: time.Now().UTC(),
+		})
+	}
+
+	s.uow.DeferErrorContext(ctx, nil) // Commit transaction
+	return nil
 }

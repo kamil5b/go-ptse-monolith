@@ -2,7 +2,8 @@ package middleware
 
 import (
 	"encoding/base64"
-	"go-modular-monolith/internal/domain/auth"
+	"go-modular-monolith/internal/modules/auth/domain"
+	sharedctx "go-modular-monolith/internal/shared/context"
 	"net/http"
 	"strings"
 )
@@ -33,21 +34,21 @@ func DefaultMiddlewareConfig() MiddlewareConfig {
 }
 
 type AuthMiddleware struct {
-	authService auth.AuthService
+	authService domain.Service
 	config      MiddlewareConfig
 }
 
-func NewAuthMiddleware(authService auth.AuthService, config MiddlewareConfig) *AuthMiddleware {
+func NewAuthMiddleware(authService domain.Service, config MiddlewareConfig) *AuthMiddleware {
 	return &AuthMiddleware{
 		authService: authService,
 		config:      config,
 	}
 }
 
-func (m *AuthMiddleware) Authenticate() func(next func(auth.Context) error) func(auth.Context) error {
-	return func(next func(auth.Context) error) func(auth.Context) error {
-		return func(c auth.Context) error {
-			var authUser *auth.AuthUser
+func (m *AuthMiddleware) Authenticate() func(next func(sharedctx.Context) error) func(sharedctx.Context) error {
+	return func(next func(sharedctx.Context) error) func(sharedctx.Context) error {
+		return func(c sharedctx.Context) error {
+			var authUser *domain.AuthUser
 			var err error
 
 			switch m.config.AuthType {
@@ -77,9 +78,9 @@ func (m *AuthMiddleware) Authenticate() func(next func(auth.Context) error) func
 	}
 }
 
-func (m *AuthMiddleware) RequireAuth() func(next func(auth.Context) error) func(auth.Context) error {
-	return func(next func(auth.Context) error) func(auth.Context) error {
-		return func(c auth.Context) error {
+func (m *AuthMiddleware) RequireAuth() func(next func(sharedctx.Context) error) func(sharedctx.Context) error {
+	return func(next func(sharedctx.Context) error) func(sharedctx.Context) error {
+		return func(c sharedctx.Context) error {
 			authUser := m.getAuthUser(c)
 			if authUser == nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -89,10 +90,10 @@ func (m *AuthMiddleware) RequireAuth() func(next func(auth.Context) error) func(
 	}
 }
 
-func (m *AuthMiddleware) OptionalAuth() func(next func(auth.Context) error) func(auth.Context) error {
-	return func(next func(auth.Context) error) func(auth.Context) error {
-		return func(c auth.Context) error {
-			var authUser *auth.AuthUser
+func (m *AuthMiddleware) OptionalAuth() func(next func(sharedctx.Context) error) func(sharedctx.Context) error {
+	return func(next func(sharedctx.Context) error) func(sharedctx.Context) error {
+		return func(c sharedctx.Context) error {
+			var authUser *domain.AuthUser
 
 			switch m.config.AuthType {
 			case AuthTypeJWT:
@@ -113,9 +114,9 @@ func (m *AuthMiddleware) OptionalAuth() func(next func(auth.Context) error) func
 	}
 }
 
-func (m *AuthMiddleware) RequireRoles(roles ...string) func(next func(auth.Context) error) func(auth.Context) error {
-	return func(next func(auth.Context) error) func(auth.Context) error {
-		return func(c auth.Context) error {
+func (m *AuthMiddleware) RequireRoles(roles ...string) func(next func(sharedctx.Context) error) func(sharedctx.Context) error {
+	return func(next func(sharedctx.Context) error) func(sharedctx.Context) error {
+		return func(c sharedctx.Context) error {
 			authUser := m.getAuthUser(c)
 			if authUser == nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
@@ -130,7 +131,7 @@ func (m *AuthMiddleware) RequireRoles(roles ...string) func(next func(auth.Conte
 	}
 }
 
-func (m *AuthMiddleware) authenticateJWT(c auth.Context) (*auth.AuthUser, error) {
+func (m *AuthMiddleware) authenticateJWT(c sharedctx.Context) (*domain.AuthUser, error) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
 		return nil, nil
@@ -147,16 +148,16 @@ func (m *AuthMiddleware) authenticateJWT(c auth.Context) (*auth.AuthUser, error)
 		return nil, err
 	}
 
-	return &auth.AuthUser{
+	return &domain.AuthUser{
 		UserID:   resp.User.ID,
 		Username: resp.User.Username,
 		Email:    resp.User.Email,
 		Roles:    resp.User.Roles,
-		AuthType: auth.AuthTypeJWT,
+		AuthType: domain.AuthTypeJWT,
 	}, nil
 }
 
-func (m *AuthMiddleware) authenticateSession(c auth.Context) (*auth.AuthUser, error) {
+func (m *AuthMiddleware) authenticateSession(c sharedctx.Context) (*domain.AuthUser, error) {
 	sessionToken, err := c.GetCookie(m.config.SessionCookie)
 	if err != nil || sessionToken == "" {
 		return nil, nil
@@ -167,17 +168,17 @@ func (m *AuthMiddleware) authenticateSession(c auth.Context) (*auth.AuthUser, er
 		return nil, err
 	}
 
-	return &auth.AuthUser{
+	return &domain.AuthUser{
 		UserID:    resp.User.ID,
 		Username:  resp.User.Username,
 		Email:     resp.User.Email,
 		Roles:     resp.User.Roles,
 		SessionID: sessionToken,
-		AuthType:  auth.AuthTypeSession,
+		AuthType:  domain.AuthTypeSession,
 	}, nil
 }
 
-func (m *AuthMiddleware) authenticateBasic(c auth.Context) (*auth.AuthUser, error) {
+func (m *AuthMiddleware) authenticateBasic(c sharedctx.Context) (*domain.AuthUser, error) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
 		return nil, nil
@@ -201,7 +202,7 @@ func (m *AuthMiddleware) authenticateBasic(c auth.Context) (*auth.AuthUser, erro
 	username := credentials[0]
 	password := credentials[1]
 
-	loginReq := &auth.LoginRequest{
+	loginReq := &domain.LoginRequest{
 		Username: username,
 		Password: password,
 	}
@@ -211,20 +212,20 @@ func (m *AuthMiddleware) authenticateBasic(c auth.Context) (*auth.AuthUser, erro
 		return nil, err
 	}
 
-	return &auth.AuthUser{
+	return &domain.AuthUser{
 		UserID:   resp.User.ID,
 		Username: resp.User.Username,
 		Email:    resp.User.Email,
-		AuthType: auth.AuthTypeBasic,
+		AuthType: domain.AuthTypeBasic,
 	}, nil
 }
 
-func (m *AuthMiddleware) getAuthUser(c auth.Context) *auth.AuthUser {
+func (m *AuthMiddleware) getAuthUser(c sharedctx.Context) *domain.AuthUser {
 	val := c.Get("auth_user")
 	if val == nil {
 		return nil
 	}
-	if authUser, ok := val.(*auth.AuthUser); ok {
+	if authUser, ok := val.(*domain.AuthUser); ok {
 		return authUser
 	}
 	return nil

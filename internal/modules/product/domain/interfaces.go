@@ -1,31 +1,22 @@
-package product
+package domain
 
 import (
 	"context"
+
+	sharedctx "go-modular-monolith/internal/shared/context"
 )
 
-type Context interface {
-	BindJSON(obj any) error
-	BindURI(obj any) error
-	BindQuery(obj any) error
-	BindHeader(obj any) error
-	Bind(obj any) error
-	JSON(code int, v any) error
-	Param(name string) string
-	GetUserID() string
-	Get(key string) any
-	GetContext() context.Context
+// Handler defines the interface for product HTTP handlers
+type Handler interface {
+	Create(c sharedctx.Context) error
+	Get(c sharedctx.Context) error
+	List(c sharedctx.Context) error
+	Update(c sharedctx.Context) error
+	Delete(c sharedctx.Context) error
 }
 
-type ProductHandler interface {
-	Create(c Context) error
-	Get(c Context) error
-	List(c Context) error
-	Update(c Context) error
-	Delete(c Context) error
-}
-
-type ProductService interface {
+// Service defines the interface for product business logic
+type Service interface {
 	Create(ctx context.Context, req *CreateProductRequest, createdBy string) (*Product, error)
 	Get(ctx context.Context, id string) (*Product, error)
 	List(ctx context.Context) ([]Product, error)
@@ -33,7 +24,8 @@ type ProductService interface {
 	Delete(ctx context.Context, id, deletedBy string) error
 }
 
-type ProductRepository interface {
+// Repository defines the interface for product data access
+type Repository interface {
 	Create(ctx context.Context, p *Product) error
 	GetByID(ctx context.Context, id string) (*Product, error)
 	List(ctx context.Context) ([]Product, error)

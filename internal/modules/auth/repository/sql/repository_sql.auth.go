@@ -2,8 +2,9 @@ package sql
 
 import (
 	"context"
-	"go-modular-monolith/internal/domain/auth"
 	"time"
+
+	"go-modular-monolith/internal/modules/auth/domain"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -46,7 +47,7 @@ func (r *SQLRepository) getTxFromContext(ctx context.Context) *sqlx.Tx {
 
 // Credential operations
 
-func (r *SQLRepository) CreateCredential(ctx context.Context, cred *auth.Credential) error {
+func (r *SQLRepository) CreateCredential(ctx context.Context, cred *domain.Credential) error {
 	query := `INSERT INTO auth_credentials 
 		(id, user_id, username, email, password_hash, is_active, created_at) 
 		VALUES (:id, :user_id, :username, :email, :password_hash, :is_active, :created_at)`
@@ -66,8 +67,8 @@ func (r *SQLRepository) CreateCredential(ctx context.Context, cred *auth.Credent
 	return err
 }
 
-func (r *SQLRepository) GetCredentialByUsername(ctx context.Context, username string) (*auth.Credential, error) {
-	var cred auth.Credential
+func (r *SQLRepository) GetCredentialByUsername(ctx context.Context, username string) (*domain.Credential, error) {
+	var cred domain.Credential
 	tx := r.getTxFromContext(ctx)
 	query := `SELECT id, user_id, username, email, password_hash, is_active, last_login_at, created_at, updated_at, deleted_at 
 		FROM auth_credentials WHERE username = $1 AND deleted_at IS NULL`
@@ -84,8 +85,8 @@ func (r *SQLRepository) GetCredentialByUsername(ctx context.Context, username st
 	return &cred, nil
 }
 
-func (r *SQLRepository) GetCredentialByEmail(ctx context.Context, email string) (*auth.Credential, error) {
-	var cred auth.Credential
+func (r *SQLRepository) GetCredentialByEmail(ctx context.Context, email string) (*domain.Credential, error) {
+	var cred domain.Credential
 	tx := r.getTxFromContext(ctx)
 	query := `SELECT id, user_id, username, email, password_hash, is_active, last_login_at, created_at, updated_at, deleted_at 
 		FROM auth_credentials WHERE email = $1 AND deleted_at IS NULL`
@@ -102,8 +103,8 @@ func (r *SQLRepository) GetCredentialByEmail(ctx context.Context, email string) 
 	return &cred, nil
 }
 
-func (r *SQLRepository) GetCredentialByUserID(ctx context.Context, userID string) (*auth.Credential, error) {
-	var cred auth.Credential
+func (r *SQLRepository) GetCredentialByUserID(ctx context.Context, userID string) (*domain.Credential, error) {
+	var cred domain.Credential
 	tx := r.getTxFromContext(ctx)
 	query := `SELECT id, user_id, username, email, password_hash, is_active, last_login_at, created_at, updated_at, deleted_at 
 		FROM auth_credentials WHERE user_id = $1 AND deleted_at IS NULL`
@@ -120,7 +121,7 @@ func (r *SQLRepository) GetCredentialByUserID(ctx context.Context, userID string
 	return &cred, nil
 }
 
-func (r *SQLRepository) UpdateCredential(ctx context.Context, cred *auth.Credential) error {
+func (r *SQLRepository) UpdateCredential(ctx context.Context, cred *domain.Credential) error {
 	now := time.Now().UTC()
 	cred.UpdatedAt = &now
 	tx := r.getTxFromContext(ctx)
@@ -164,7 +165,7 @@ func (r *SQLRepository) UpdateLastLogin(ctx context.Context, userID string) erro
 
 // Session operations
 
-func (r *SQLRepository) CreateSession(ctx context.Context, session *auth.Session) error {
+func (r *SQLRepository) CreateSession(ctx context.Context, session *domain.Session) error {
 	query := `INSERT INTO auth_sessions 
 		(id, user_id, token, expires_at, created_at, user_agent, ip_address) 
 		VALUES (:id, :user_id, :token, :expires_at, :created_at, :user_agent, :ip_address)`
@@ -183,8 +184,8 @@ func (r *SQLRepository) CreateSession(ctx context.Context, session *auth.Session
 	return err
 }
 
-func (r *SQLRepository) GetSessionByToken(ctx context.Context, token string) (*auth.Session, error) {
-	var session auth.Session
+func (r *SQLRepository) GetSessionByToken(ctx context.Context, token string) (*domain.Session, error) {
+	var session domain.Session
 	tx := r.getTxFromContext(ctx)
 	query := `SELECT id, user_id, token, expires_at, created_at, updated_at, revoked_at, user_agent, ip_address 
 		FROM auth_sessions WHERE token = $1 AND revoked_at IS NULL AND expires_at > NOW()`
@@ -201,8 +202,8 @@ func (r *SQLRepository) GetSessionByToken(ctx context.Context, token string) (*a
 	return &session, nil
 }
 
-func (r *SQLRepository) GetSessionByID(ctx context.Context, id string) (*auth.Session, error) {
-	var session auth.Session
+func (r *SQLRepository) GetSessionByID(ctx context.Context, id string) (*domain.Session, error) {
+	var session domain.Session
 	tx := r.getTxFromContext(ctx)
 	query := `SELECT id, user_id, token, expires_at, created_at, updated_at, revoked_at, user_agent, ip_address 
 		FROM auth_sessions WHERE id = $1`
@@ -219,8 +220,8 @@ func (r *SQLRepository) GetSessionByID(ctx context.Context, id string) (*auth.Se
 	return &session, nil
 }
 
-func (r *SQLRepository) GetSessionsByUserID(ctx context.Context, userID string) ([]auth.Session, error) {
-	var sessions []auth.Session
+func (r *SQLRepository) GetSessionsByUserID(ctx context.Context, userID string) ([]domain.Session, error) {
+	var sessions []domain.Session
 	tx := r.getTxFromContext(ctx)
 	query := `SELECT id, user_id, token, expires_at, created_at, updated_at, revoked_at, user_agent, ip_address 
 		FROM auth_sessions WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > NOW() ORDER BY created_at DESC`

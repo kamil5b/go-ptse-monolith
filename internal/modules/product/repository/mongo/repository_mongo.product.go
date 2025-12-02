@@ -1,13 +1,13 @@
-package product
+package mongo
 
 import (
 	"context"
 	"errors"
-	"go-modular-monolith/internal/domain/product"
 	"time"
 
+	"go-modular-monolith/internal/modules/product/domain"
+
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -29,11 +29,7 @@ func NewMongoRepository(client *mongo.Client, dbName string) *MongoRepository {
 	return &MongoRepository{col: col}
 }
 
-func (r *MongoRepository) NewTxContext(ctx context.Context, tx *sqlx.DB) context.Context {
-	return ctx
-}
-
-func (r *MongoRepository) Create(ctx context.Context, p *product.Product) error {
+func (r *MongoRepository) Create(ctx context.Context, p *domain.Product) error {
 	if p.ID == "" {
 		p.ID = uuid.NewString()
 	}
@@ -42,8 +38,8 @@ func (r *MongoRepository) Create(ctx context.Context, p *product.Product) error 
 	return err
 }
 
-func (r *MongoRepository) GetByID(ctx context.Context, id string) (*product.Product, error) {
-	var p product.Product
+func (r *MongoRepository) GetByID(ctx context.Context, id string) (*domain.Product, error) {
+	var p domain.Product
 	if err := r.col.FindOne(ctx, bson.M{"id": id}).Decode(&p); err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, err
@@ -53,15 +49,15 @@ func (r *MongoRepository) GetByID(ctx context.Context, id string) (*product.Prod
 	return &p, nil
 }
 
-func (r *MongoRepository) List(ctx context.Context) ([]product.Product, error) {
+func (r *MongoRepository) List(ctx context.Context) ([]domain.Product, error) {
 	cur, err := r.col.Find(ctx, bson.M{"deleted_at": bson.M{"$exists": false}})
 	if err != nil {
 		return nil, err
 	}
 	defer cur.Close(ctx)
-	var res []product.Product
+	var res []domain.Product
 	for cur.Next(ctx) {
-		var p product.Product
+		var p domain.Product
 		if err := cur.Decode(&p); err != nil {
 			return nil, err
 		}
@@ -70,7 +66,7 @@ func (r *MongoRepository) List(ctx context.Context) ([]product.Product, error) {
 	return res, nil
 }
 
-func (r *MongoRepository) Update(ctx context.Context, p *product.Product) error {
+func (r *MongoRepository) Update(ctx context.Context, p *domain.Product) error {
 	now := time.Now().UTC()
 	p.UpdatedAt = &now
 	upd := bson.M{"$set": bson.M{"name": p.Name, "description": p.Description, "updated_at": p.UpdatedAt, "updated_by": p.UpdatedBy}}

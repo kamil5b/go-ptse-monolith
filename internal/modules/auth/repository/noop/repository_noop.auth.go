@@ -3,7 +3,7 @@ package noop
 import (
 	"context"
 	"errors"
-	"go-modular-monolith/internal/domain/auth"
+	"go-modular-monolith/internal/modules/auth/domain"
 )
 
 var ErrNotImplemented = errors.New("auth repository not implemented")
@@ -22,23 +22,23 @@ func (r *NoopRepository) DeferErrorContext(ctx context.Context, err error) {}
 
 // Credential operations
 
-func (r *NoopRepository) CreateCredential(ctx context.Context, cred *auth.Credential) error {
+func (r *NoopRepository) CreateCredential(ctx context.Context, cred *domain.Credential) error {
 	return ErrNotImplemented
 }
 
-func (r *NoopRepository) GetCredentialByUsername(ctx context.Context, username string) (*auth.Credential, error) {
+func (r *NoopRepository) GetCredentialByUsername(ctx context.Context, username string) (*domain.Credential, error) {
 	return nil, ErrNotImplemented
 }
 
-func (r *NoopRepository) GetCredentialByEmail(ctx context.Context, email string) (*auth.Credential, error) {
+func (r *NoopRepository) GetCredentialByEmail(ctx context.Context, email string) (*domain.Credential, error) {
 	return nil, ErrNotImplemented
 }
 
-func (r *NoopRepository) GetCredentialByUserID(ctx context.Context, userID string) (*auth.Credential, error) {
+func (r *NoopRepository) GetCredentialByUserID(ctx context.Context, userID string) (*domain.Credential, error) {
 	return nil, ErrNotImplemented
 }
 
-func (r *NoopRepository) UpdateCredential(ctx context.Context, cred *auth.Credential) error {
+func (r *NoopRepository) UpdateCredential(ctx context.Context, cred *domain.Credential) error {
 	return ErrNotImplemented
 }
 
@@ -52,19 +52,19 @@ func (r *NoopRepository) UpdateLastLogin(ctx context.Context, userID string) err
 
 // Session operations
 
-func (r *NoopRepository) CreateSession(ctx context.Context, session *auth.Session) error {
+func (r *NoopRepository) CreateSession(ctx context.Context, session *domain.Session) error {
 	return ErrNotImplemented
 }
 
-func (r *NoopRepository) GetSessionByToken(ctx context.Context, token string) (*auth.Session, error) {
+func (r *NoopRepository) GetSessionByToken(ctx context.Context, token string) (*domain.Session, error) {
 	return nil, ErrNotImplemented
 }
 
-func (r *NoopRepository) GetSessionByID(ctx context.Context, id string) (*auth.Session, error) {
+func (r *NoopRepository) GetSessionByID(ctx context.Context, id string) (*domain.Session, error) {
 	return nil, ErrNotImplemented
 }
 
-func (r *NoopRepository) GetSessionsByUserID(ctx context.Context, userID string) ([]auth.Session, error) {
+func (r *NoopRepository) GetSessionsByUserID(ctx context.Context, userID string) ([]domain.Session, error) {
 	return nil, ErrNotImplemented
 }
 

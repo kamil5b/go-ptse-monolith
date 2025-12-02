@@ -2,7 +2,7 @@ package mongo
 
 import (
 	"context"
-	"go-modular-monolith/internal/domain/auth"
+	"go-modular-monolith/internal/modules/auth/domain"
 	"time"
 
 	"github.com/google/uuid"
@@ -45,7 +45,7 @@ func (r *MongoRepository) DeferErrorContext(ctx context.Context, err error) {
 
 // Credential operations
 
-func (r *MongoRepository) CreateCredential(ctx context.Context, cred *auth.Credential) error {
+func (r *MongoRepository) CreateCredential(ctx context.Context, cred *domain.Credential) error {
 	if cred.ID == "" {
 		cred.ID = uuid.NewString()
 	}
@@ -56,8 +56,8 @@ func (r *MongoRepository) CreateCredential(ctx context.Context, cred *auth.Crede
 	return err
 }
 
-func (r *MongoRepository) GetCredentialByUsername(ctx context.Context, username string) (*auth.Credential, error) {
-	var cred auth.Credential
+func (r *MongoRepository) GetCredentialByUsername(ctx context.Context, username string) (*domain.Credential, error) {
+	var cred domain.Credential
 	filter := bson.M{
 		"username":   username,
 		"deleted_at": bson.M{"$eq": nil},
@@ -70,8 +70,8 @@ func (r *MongoRepository) GetCredentialByUsername(ctx context.Context, username 
 	return &cred, nil
 }
 
-func (r *MongoRepository) GetCredentialByEmail(ctx context.Context, email string) (*auth.Credential, error) {
-	var cred auth.Credential
+func (r *MongoRepository) GetCredentialByEmail(ctx context.Context, email string) (*domain.Credential, error) {
+	var cred domain.Credential
 	filter := bson.M{
 		"email":      email,
 		"deleted_at": bson.M{"$eq": nil},
@@ -84,8 +84,8 @@ func (r *MongoRepository) GetCredentialByEmail(ctx context.Context, email string
 	return &cred, nil
 }
 
-func (r *MongoRepository) GetCredentialByUserID(ctx context.Context, userID string) (*auth.Credential, error) {
-	var cred auth.Credential
+func (r *MongoRepository) GetCredentialByUserID(ctx context.Context, userID string) (*domain.Credential, error) {
+	var cred domain.Credential
 	filter := bson.M{
 		"user_id":    userID,
 		"deleted_at": bson.M{"$eq": nil},
@@ -98,7 +98,7 @@ func (r *MongoRepository) GetCredentialByUserID(ctx context.Context, userID stri
 	return &cred, nil
 }
 
-func (r *MongoRepository) UpdateCredential(ctx context.Context, cred *auth.Credential) error {
+func (r *MongoRepository) UpdateCredential(ctx context.Context, cred *domain.Credential) error {
 	now := time.Now().UTC()
 	cred.UpdatedAt = &now
 
@@ -146,7 +146,7 @@ func (r *MongoRepository) UpdateLastLogin(ctx context.Context, userID string) er
 
 // Session operations
 
-func (r *MongoRepository) CreateSession(ctx context.Context, session *auth.Session) error {
+func (r *MongoRepository) CreateSession(ctx context.Context, session *domain.Session) error {
 	if session.ID == "" {
 		session.ID = uuid.NewString()
 	}
@@ -156,8 +156,8 @@ func (r *MongoRepository) CreateSession(ctx context.Context, session *auth.Sessi
 	return err
 }
 
-func (r *MongoRepository) GetSessionByToken(ctx context.Context, token string) (*auth.Session, error) {
-	var session auth.Session
+func (r *MongoRepository) GetSessionByToken(ctx context.Context, token string) (*domain.Session, error) {
+	var session domain.Session
 	filter := bson.M{
 		"token":      token,
 		"revoked_at": bson.M{"$eq": nil},
@@ -171,8 +171,8 @@ func (r *MongoRepository) GetSessionByToken(ctx context.Context, token string) (
 	return &session, nil
 }
 
-func (r *MongoRepository) GetSessionByID(ctx context.Context, id string) (*auth.Session, error) {
-	var session auth.Session
+func (r *MongoRepository) GetSessionByID(ctx context.Context, id string) (*domain.Session, error) {
+	var session domain.Session
 	filter := bson.M{"id": id}
 
 	err := r.getSessionsCollection().FindOne(ctx, filter).Decode(&session)
@@ -182,7 +182,7 @@ func (r *MongoRepository) GetSessionByID(ctx context.Context, id string) (*auth.
 	return &session, nil
 }
 
-func (r *MongoRepository) GetSessionsByUserID(ctx context.Context, userID string) ([]auth.Session, error) {
+func (r *MongoRepository) GetSessionsByUserID(ctx context.Context, userID string) ([]domain.Session, error) {
 	filter := bson.M{
 		"user_id":    userID,
 		"revoked_at": bson.M{"$eq": nil},
@@ -196,7 +196,7 @@ func (r *MongoRepository) GetSessionsByUserID(ctx context.Context, userID string
 	}
 	defer cursor.Close(ctx)
 
-	var sessions []auth.Session
+	var sessions []domain.Session
 	if err := cursor.All(ctx, &sessions); err != nil {
 		return nil, err
 	}

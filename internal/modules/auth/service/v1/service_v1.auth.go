@@ -5,8 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	"go-modular-monolith/internal/domain/auth"
-	"go-modular-monolith/internal/domain/user"
+	"go-modular-monolith/internal/modules/auth/domain"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -44,20 +43,20 @@ func DefaultAuthConfig() AuthConfig {
 }
 
 type ServiceV1 struct {
-	repo     auth.AuthRepository
-	userRepo user.UserRepository
-	config   AuthConfig
+	repo        domain.Repository
+	userCreator domain.UserCreator // ACL interface instead of direct user repo
+	config      AuthConfig
 }
 
-func NewServiceV1(repo auth.AuthRepository, userRepo user.UserRepository, config AuthConfig) *ServiceV1 {
+func NewServiceV1(repo domain.Repository, userCreator domain.UserCreator, config AuthConfig) *ServiceV1 {
 	return &ServiceV1{
-		repo:     repo,
-		userRepo: userRepo,
-		config:   config,
+		repo:        repo,
+		userCreator: userCreator,
+		config:      config,
 	}
 }
 
-func (s *ServiceV1) Login(ctx context.Context, req *auth.LoginRequest, userAgent, ipAddress string) (*auth.LoginResponse, error) {
+func (s *ServiceV1) Login(ctx context.Context, req *domain.LoginRequest, userAgent, ipAddress string) (*domain.LoginResponse, error) {
 	cred, err := s.repo.GetCredentialByUsername(ctx, req.Username)
 	if err != nil {
 		cred, err = s.repo.GetCredentialByEmail(ctx, req.Username)
@@ -76,7 +75,7 @@ func (s *ServiceV1) Login(ctx context.Context, req *auth.LoginRequest, userAgent
 
 	_ = s.repo.UpdateLastLogin(ctx, cred.UserID)
 
-	claims := &auth.TokenClaims{
+	claims := &domain.TokenClaims{
 		UserID:   cred.UserID,
 		Username: cred.Username,
 		Email:    cred.Email,
@@ -92,7 +91,7 @@ func (s *ServiceV1) Login(ctx context.Context, req *auth.LoginRequest, userAgent
 		return nil, err
 	}
 
-	session := &auth.Session{
+	session := &domain.Session{
 		ID:        uuid.NewString(),
 		UserID:    cred.UserID,
 		Token:     refreshToken,
@@ -106,13 +105,13 @@ func (s *ServiceV1) Login(ctx context.Context, req *auth.LoginRequest, userAgent
 	}
 
 	expiresAt := time.Now().UTC().Add(s.config.AccessTokenDuration)
-	return &auth.LoginResponse{
+	return &domain.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
 		ExpiresIn:    int64(s.config.AccessTokenDuration.Seconds()),
 		ExpiresAt:    expiresAt,
-		User: &auth.UserInfo{
+		User: &domain.UserInfo{
 			ID:       cred.UserID,
 			Username: cred.Username,
 			Email:    cred.Email,
@@ -120,7 +119,7 @@ func (s *ServiceV1) Login(ctx context.Context, req *auth.LoginRequest, userAgent
 	}, nil
 }
 
-func (s *ServiceV1) Register(ctx context.Context, req *auth.RegisterRequest) (*auth.RegisterResponse, error) {
+func (s *ServiceV1) Register(ctx context.Context, req *domain.RegisterRequest) (*domain.RegisterResponse, error) {
 	if _, err := s.repo.GetCredentialByUsername(ctx, req.Username); err == nil {
 		return nil, ErrUsernameExists
 	}
@@ -135,21 +134,22 @@ func (s *ServiceV1) Register(ctx context.Context, req *auth.RegisterRequest) (*a
 	}
 
 	userID := uuid.NewString()
-	newUser := &user.User{
+
+	// Use ACL to create user - auth module doesn't depend on user module internals
+	newUser := &domain.NewUser{
 		ID:        userID,
 		Name:      req.Name,
 		Email:     req.Email,
-		CreatedAt: time.Now().UTC(),
 		CreatedBy: userID,
 	}
 
 	ctx = s.repo.StartContext(ctx)
-	if err := s.userRepo.Create(ctx, newUser); err != nil {
+	if err := s.userCreator.CreateUser(ctx, newUser); err != nil {
 		s.repo.DeferErrorContext(ctx, err)
 		return nil, err
 	}
 
-	cred := &auth.Credential{
+	cred := &domain.Credential{
 		ID:           uuid.NewString(),
 		UserID:       userID,
 		Username:     req.Username,
@@ -165,8 +165,8 @@ func (s *ServiceV1) Register(ctx context.Context, req *auth.RegisterRequest) (*a
 
 	s.repo.DeferErrorContext(ctx, nil)
 
-	return &auth.RegisterResponse{
-		User: &auth.UserInfo{
+	return &domain.RegisterResponse{
+		User: &domain.UserInfo{
 			ID:       userID,
 			Username: req.Username,
 			Email:    req.Email,
@@ -176,7 +176,7 @@ func (s *ServiceV1) Register(ctx context.Context, req *auth.RegisterRequest) (*a
 	}, nil
 }
 
-func (s *ServiceV1) Logout(ctx context.Context, userID string, req *auth.LogoutRequest) error {
+func (s *ServiceV1) Logout(ctx context.Context, userID string, req *domain.LogoutRequest) error {
 	if req.AllDevices {
 		return s.repo.RevokeAllUserSessions(ctx, userID)
 	}
@@ -192,7 +192,7 @@ func (s *ServiceV1) Logout(ctx context.Context, userID string, req *auth.LogoutR
 	return nil
 }
 
-func (s *ServiceV1) RefreshToken(ctx context.Context, refreshToken string) (*auth.RefreshTokenResponse, error) {
+func (s *ServiceV1) RefreshToken(ctx context.Context, refreshToken string) (*domain.RefreshTokenResponse, error) {
 	session, err := s.repo.GetSessionByToken(ctx, refreshToken)
 	if err != nil {
 		return nil, ErrInvalidToken
@@ -207,7 +207,7 @@ func (s *ServiceV1) RefreshToken(ctx context.Context, refreshToken string) (*aut
 		return nil, ErrUserNotActive
 	}
 
-	claims := &auth.TokenClaims{
+	claims := &domain.TokenClaims{
 		UserID:   cred.UserID,
 		Username: cred.Username,
 		Email:    cred.Email,
@@ -219,7 +219,7 @@ func (s *ServiceV1) RefreshToken(ctx context.Context, refreshToken string) (*aut
 	}
 
 	expiresAt := time.Now().UTC().Add(s.config.AccessTokenDuration)
-	return &auth.RefreshTokenResponse{
+	return &domain.RefreshTokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
@@ -228,10 +228,10 @@ func (s *ServiceV1) RefreshToken(ctx context.Context, refreshToken string) (*aut
 	}, nil
 }
 
-func (s *ServiceV1) ValidateToken(ctx context.Context, token string) (*auth.ValidateTokenResponse, error) {
+func (s *ServiceV1) ValidateToken(ctx context.Context, token string) (*domain.ValidateTokenResponse, error) {
 	claims, err := s.ParseToken(token)
 	if err != nil {
-		return &auth.ValidateTokenResponse{
+		return &domain.ValidateTokenResponse{
 			Valid:  false,
 			Reason: err.Error(),
 		}, nil
@@ -239,22 +239,22 @@ func (s *ServiceV1) ValidateToken(ctx context.Context, token string) (*auth.Vali
 
 	cred, err := s.repo.GetCredentialByUserID(ctx, claims.UserID)
 	if err != nil {
-		return &auth.ValidateTokenResponse{
+		return &domain.ValidateTokenResponse{
 			Valid:  false,
 			Reason: "user not found",
 		}, nil
 	}
 
 	if !cred.IsActive {
-		return &auth.ValidateTokenResponse{
+		return &domain.ValidateTokenResponse{
 			Valid:  false,
 			Reason: "user account is inactive",
 		}, nil
 	}
 
-	return &auth.ValidateTokenResponse{
+	return &domain.ValidateTokenResponse{
 		Valid: true,
-		User: &auth.UserInfo{
+		User: &domain.UserInfo{
 			ID:       claims.UserID,
 			Username: claims.Username,
 			Email:    claims.Email,
@@ -263,7 +263,7 @@ func (s *ServiceV1) ValidateToken(ctx context.Context, token string) (*auth.Vali
 	}, nil
 }
 
-func (s *ServiceV1) ChangePassword(ctx context.Context, userID string, req *auth.ChangePasswordRequest) error {
+func (s *ServiceV1) ChangePassword(ctx context.Context, userID string, req *domain.ChangePasswordRequest) error {
 	cred, err := s.repo.GetCredentialByUserID(ctx, userID)
 	if err != nil {
 		return ErrUserNotFound
@@ -281,23 +281,23 @@ func (s *ServiceV1) ChangePassword(ctx context.Context, userID string, req *auth
 	return s.repo.UpdatePassword(ctx, userID, hashedPassword)
 }
 
-func (s *ServiceV1) ResetPassword(ctx context.Context, req *auth.ResetPasswordRequest) error {
+func (s *ServiceV1) ResetPassword(ctx context.Context, req *domain.ResetPasswordRequest) error {
 	return nil
 }
 
-func (s *ServiceV1) ConfirmResetPassword(ctx context.Context, req *auth.ConfirmResetPasswordRequest) error {
+func (s *ServiceV1) ConfirmResetPassword(ctx context.Context, req *domain.ConfirmResetPasswordRequest) error {
 	return nil
 }
 
-func (s *ServiceV1) GetSessions(ctx context.Context, userID string) (*auth.SessionListResponse, error) {
+func (s *ServiceV1) GetSessions(ctx context.Context, userID string) (*domain.SessionListResponse, error) {
 	sessions, err := s.repo.GetSessionsByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	sessionInfos := make([]auth.SessionInfo, len(sessions))
+	sessionInfos := make([]domain.SessionInfo, len(sessions))
 	for i, sess := range sessions {
-		sessionInfos[i] = auth.SessionInfo{
+		sessionInfos[i] = domain.SessionInfo{
 			ID:        sess.ID,
 			UserAgent: sess.UserAgent,
 			IPAddress: sess.IPAddress,
@@ -306,7 +306,7 @@ func (s *ServiceV1) GetSessions(ctx context.Context, userID string) (*auth.Sessi
 		}
 	}
 
-	return &auth.SessionListResponse{Sessions: sessionInfos}, nil
+	return &domain.SessionListResponse{Sessions: sessionInfos}, nil
 }
 
 func (s *ServiceV1) RevokeSession(ctx context.Context, userID, sessionID string) error {
@@ -334,7 +334,7 @@ type jwtClaims struct {
 	Roles    []string `json:"roles,omitempty"`
 }
 
-func (s *ServiceV1) GenerateAccessToken(claims *auth.TokenClaims) (string, error) {
+func (s *ServiceV1) GenerateAccessToken(claims *domain.TokenClaims) (string, error) {
 	now := time.Now().UTC()
 	jwtClaims := jwtClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -361,7 +361,7 @@ func (s *ServiceV1) GenerateRefreshToken(userID string) (string, error) {
 	return base64.URLEncoding.EncodeToString(bytes), nil
 }
 
-func (s *ServiceV1) ParseToken(tokenString string) (*auth.TokenClaims, error) {
+func (s *ServiceV1) ParseToken(tokenString string) (*domain.TokenClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &jwtClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrInvalidToken
@@ -374,7 +374,7 @@ func (s *ServiceV1) ParseToken(tokenString string) (*auth.TokenClaims, error) {
 	}
 
 	if claims, ok := token.Claims.(*jwtClaims); ok && token.Valid {
-		return &auth.TokenClaims{
+		return &domain.TokenClaims{
 			UserID:   claims.UserID,
 			Username: claims.Username,
 			Email:    claims.Email,

@@ -2,19 +2,24 @@ package v1
 
 import (
 	"context"
-	"go-modular-monolith/internal/domain/user"
 	"time"
+
+	"go-modular-monolith/internal/modules/user/domain"
+	"go-modular-monolith/internal/shared/events"
 )
 
 type ServiceV1 struct {
-	repo user.UserRepository
+	repo     domain.Repository
+	eventBus events.EventBus
 }
 
-func NewServiceV1(r user.UserRepository) *ServiceV1 { return &ServiceV1{repo: r} }
+func NewServiceV1(r domain.Repository, eb events.EventBus) *ServiceV1 {
+	return &ServiceV1{repo: r, eventBus: eb}
+}
 
-func (s *ServiceV1) Create(ctx context.Context, req *user.CreateUserRequest, createdBy string) (*user.User, error) {
+func (s *ServiceV1) Create(ctx context.Context, req *domain.CreateUserRequest, createdBy string) (*domain.User, error) {
 	ctx = s.repo.StartContext(ctx)
-	var u user.User
+	var u domain.User
 	u.Name = req.Name
 	u.Email = req.Email
 	u.CreatedAt = time.Now().UTC()
@@ -23,18 +28,32 @@ func (s *ServiceV1) Create(ctx context.Context, req *user.CreateUserRequest, cre
 		s.repo.DeferErrorContext(ctx, err)
 		return nil, err
 	}
+
+	// Publish event for inter-module communication
+	if s.eventBus != nil {
+		_ = s.eventBus.Publish(ctx, domain.UserCreatedEvent{
+			UserID:    u.ID,
+			Name:      u.Name,
+			Email:     u.Email,
+			CreatedBy: createdBy,
+			CreatedAt: u.CreatedAt,
+		})
+	}
+
+	s.repo.DeferErrorContext(ctx, nil) // Commit transaction
 	return &u, nil
 }
 
-func (s *ServiceV1) Get(ctx context.Context, id string) (*user.User, error) {
+func (s *ServiceV1) Get(ctx context.Context, id string) (*domain.User, error) {
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *ServiceV1) List(ctx context.Context) ([]user.User, error) {
+func (s *ServiceV1) List(ctx context.Context) ([]domain.User, error) {
 	return s.repo.List(ctx)
 }
 
-func (s *ServiceV1) Update(ctx context.Context, req *user.UpdateUserRequest, updatedBy string) (*user.User, error) {
+func (s *ServiceV1) Update(ctx context.Context, req *domain.UpdateUserRequest, updatedBy string) (*domain.User, error) {
+	ctx = s.repo.StartContext(ctx)
 	u, err := s.repo.GetByID(ctx, req.ID)
 	if err != nil {
 		return nil, err
@@ -52,9 +71,39 @@ func (s *ServiceV1) Update(ctx context.Context, req *user.UpdateUserRequest, upd
 		s.repo.DeferErrorContext(ctx, err)
 		return nil, err
 	}
+
+	// Publish event for inter-module communication
+	if s.eventBus != nil {
+		_ = s.eventBus.Publish(ctx, domain.UserUpdatedEvent{
+			UserID:    u.ID,
+			Name:      u.Name,
+			Email:     u.Email,
+			UpdatedBy: updatedBy,
+			UpdatedAt: now,
+		})
+	}
+
+	s.repo.DeferErrorContext(ctx, nil) // Commit transaction
 	return u, nil
 }
 
 func (s *ServiceV1) Delete(ctx context.Context, id, by string) error {
-	return s.repo.SoftDelete(ctx, id, by)
+	ctx = s.repo.StartContext(ctx)
+	err := s.repo.SoftDelete(ctx, id, by)
+	if err != nil {
+		s.repo.DeferErrorContext(ctx, err)
+		return err
+	}
+
+	// Publish event for inter-module communication
+	if s.eventBus != nil {
+		_ = s.eventBus.Publish(ctx, domain.UserDeletedEvent{
+			UserID:    id,
+			DeletedBy: by,
+			DeletedAt: time.Now().UTC(),
+		})
+	}
+
+	s.repo.DeferErrorContext(ctx, nil) // Commit transaction
+	return nil
 }

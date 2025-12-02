@@ -1,7 +1,8 @@
-package product
+package domain
 
 import "time"
 
+// Product represents the product entity
 type Product struct {
 	ID          string     `db:"id" json:"id" bson:"id"`
 	Name        string     `db:"name" json:"name" bson:"name"`

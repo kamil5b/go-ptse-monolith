@@ -1,11 +1,12 @@
-package product
+package sql
 
 import (
 	"context"
-	"go-modular-monolith/internal/domain/product"
+	"time"
+
+	"go-modular-monolith/internal/modules/product/domain"
 	"go-modular-monolith/pkg/constant"
 	"go-modular-monolith/pkg/util"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -25,7 +26,7 @@ func (r *SQLRepository) getTxFromContext(ctx context.Context) *sqlx.Tx {
 	return util.GetObjectFromContext[sqlx.Tx](ctx, constant.ContextKeyPostgresTx)
 }
 
-func (r *SQLRepository) Create(ctx context.Context, p *product.Product) error {
+func (r *SQLRepository) Create(ctx context.Context, p *domain.Product) error {
 	query := `INSERT INTO products (id,name,description,created_at,created_by) VALUES (:id,:name,:description,:created_at,:created_by)`
 	tx := r.getTxFromContext(ctx)
 	if p.ID == "" {
@@ -40,8 +41,8 @@ func (r *SQLRepository) Create(ctx context.Context, p *product.Product) error {
 	return err
 }
 
-func (r *SQLRepository) GetByID(ctx context.Context, id string) (*product.Product, error) {
-	var p product.Product
+func (r *SQLRepository) GetByID(ctx context.Context, id string) (*domain.Product, error) {
+	var p domain.Product
 	tx := r.getTxFromContext(ctx)
 	query := `SELECT id,name,description,created_at,created_by,updated_at,updated_by,deleted_at,deleted_by FROM products WHERE id=$1`
 	if tx != nil {
@@ -56,8 +57,8 @@ func (r *SQLRepository) GetByID(ctx context.Context, id string) (*product.Produc
 	return &p, nil
 }
 
-func (r *SQLRepository) List(ctx context.Context) ([]product.Product, error) {
-	var lst []product.Product
+func (r *SQLRepository) List(ctx context.Context) ([]domain.Product, error) {
+	var lst []domain.Product
 	tx := r.getTxFromContext(ctx)
 	query := `SELECT id,name,description,created_at,created_by,updated_at,updated_by FROM products WHERE deleted_at IS NULL ORDER BY created_at DESC`
 	if tx != nil {
@@ -72,7 +73,7 @@ func (r *SQLRepository) List(ctx context.Context) ([]product.Product, error) {
 	return lst, nil
 }
 
-func (r *SQLRepository) Update(ctx context.Context, p *product.Product) error {
+func (r *SQLRepository) Update(ctx context.Context, p *domain.Product) error {
 	now := time.Now().UTC()
 	p.UpdatedAt = &now
 	tx := r.getTxFromContext(ctx)

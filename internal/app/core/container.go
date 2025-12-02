@@ -1,26 +1,28 @@
 package core
 
 import (
-	"go-modular-monolith/internal/domain/auth"
-	"go-modular-monolith/internal/domain/product"
-	"go-modular-monolith/internal/domain/uow"
-	"go-modular-monolith/internal/domain/user"
+	// Shared packages
+	"go-modular-monolith/internal/shared/events"
+	"go-modular-monolith/internal/shared/uow"
 
+	// Product module
+	productDomain "go-modular-monolith/internal/modules/product/domain"
+	handlerUnimplemented "go-modular-monolith/internal/modules/product/handler/noop"
+	handlerV1 "go-modular-monolith/internal/modules/product/handler/v1"
 	repoMongo "go-modular-monolith/internal/modules/product/repository/mongo"
 	repoSQL "go-modular-monolith/internal/modules/product/repository/sql"
-	"go-modular-monolith/internal/modules/unitofwork"
-
 	serviceUnimplemented "go-modular-monolith/internal/modules/product/service/noop"
 	serviceV1 "go-modular-monolith/internal/modules/product/service/v1"
 
-	handlerUnimplemented "go-modular-monolith/internal/modules/product/handler/noop"
-	handlerV1 "go-modular-monolith/internal/modules/product/handler/v1"
-
+	// User module
+	userDomain "go-modular-monolith/internal/modules/user/domain"
 	handlerV1User "go-modular-monolith/internal/modules/user/handler/v1"
 	repoSQLUser "go-modular-monolith/internal/modules/user/repository/sql"
 	serviceV1User "go-modular-monolith/internal/modules/user/service/v1"
 
-	// Auth imports
+	// Auth module
+	authACL "go-modular-monolith/internal/modules/auth/acl"
+	authDomain "go-modular-monolith/internal/modules/auth/domain"
 	handlerNoopAuth "go-modular-monolith/internal/modules/auth/handler/noop"
 	handlerV1Auth "go-modular-monolith/internal/modules/auth/handler/v1"
 	"go-modular-monolith/internal/modules/auth/middleware"
@@ -30,21 +32,32 @@ import (
 	serviceNoopAuth "go-modular-monolith/internal/modules/auth/service/noop"
 	serviceV1Auth "go-modular-monolith/internal/modules/auth/service/v1"
 
+	// Unit of Work
+	"go-modular-monolith/internal/modules/unitofwork"
+
 	"github.com/jmoiron/sqlx"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type Container struct {
-	ProductRepository product.ProductRepository
-	ProductService    product.ProductService
-	ProductHandler    product.ProductHandler
-	UserRepository    user.UserRepository
-	UserService       user.UserService
-	UserHandler       user.UserHandler
-	AuthRepository    auth.AuthRepository
-	AuthService       auth.AuthService
-	AuthHandler       auth.AuthHandler
-	AuthMiddleware    *middleware.AuthMiddleware
+	// Event Bus (shared)
+	EventBus events.EventBus
+
+	// Product module
+	ProductRepository productDomain.Repository
+	ProductService    productDomain.Service
+	ProductHandler    productDomain.Handler
+
+	// User module
+	UserRepository userDomain.Repository
+	UserService    userDomain.Service
+	UserHandler    userDomain.Handler
+
+	// Auth module
+	AuthRepository authDomain.Repository
+	AuthService    authDomain.Service
+	AuthHandler    authDomain.Handler
+	AuthMiddleware *middleware.AuthMiddleware
 }
 
 func NewContainer(
@@ -54,18 +67,21 @@ func NewContainer(
 	mongoClient *mongo.Client,
 ) *Container {
 	var (
-		productRepository product.ProductRepository
-		productService    product.ProductService
-		productHandler    product.ProductHandler
-		userRepository    user.UserRepository
-		userService       user.UserService
-		userHandler       user.UserHandler
-		authRepository    auth.AuthRepository
-		authService       auth.AuthService
-		authHandler       auth.AuthHandler
+		productRepository productDomain.Repository
+		productService    productDomain.Service
+		productHandler    productDomain.Handler
+		userRepository    userDomain.Repository
+		userService       userDomain.Service
+		userHandler       userDomain.Handler
+		authRepository    authDomain.Repository
+		authService       authDomain.Service
+		authHandler       authDomain.Handler
 		authMiddleware    *middleware.AuthMiddleware
 		unitOfWork        uow.UnitOfWork
 	)
+
+	// Initialize event bus (shared across all modules)
+	eventBus := events.NewInMemoryEventBus()
 
 	// repo
 	switch featureFlag.Repository.Product {
@@ -83,7 +99,7 @@ func NewContainer(
 	// service
 	switch featureFlag.Service.Product {
 	case "v1":
-		productService = serviceV1.NewServiceV1(productRepository, unitOfWork)
+		productService = serviceV1.NewServiceV1(productRepository, unitOfWork, eventBus)
 	default:
 		productService = serviceUnimplemented.NewUnimplementedService()
 	}
@@ -106,7 +122,7 @@ func NewContainer(
 	// user service
 	switch featureFlag.Service.User {
 	case "v1":
-		userService = serviceV1User.NewServiceV1(userRepository)
+		userService = serviceV1User.NewServiceV1(userRepository, eventBus)
 	default:
 	}
 
@@ -134,7 +150,9 @@ func NewContainer(
 		if config != nil && config.App.JWT.Secret != "" {
 			authConfig.JWTSecret = config.App.JWT.Secret
 		}
-		authService = serviceV1Auth.NewServiceV1(authRepository, userRepository, authConfig)
+		// Create ACL adapter for user creation - auth module doesn't directly depend on user module
+		userCreator := authACL.NewUserCreatorAdapter(userRepository)
+		authService = serviceV1Auth.NewServiceV1(authRepository, userCreator, authConfig)
 	default:
 		authService = serviceNoopAuth.NewNoopService()
 	}
@@ -158,14 +176,16 @@ func NewContainer(
 	authMiddleware = middleware.NewAuthMiddleware(authService, middlewareConfig)
 
 	return &Container{
-		ProductService: productService,
-		ProductHandler: productHandler,
-		UserRepository: userRepository,
-		UserService:    userService,
-		UserHandler:    userHandler,
-		AuthRepository: authRepository,
-		AuthService:    authService,
-		AuthHandler:    authHandler,
-		AuthMiddleware: authMiddleware,
+		EventBus:          eventBus,
+		ProductRepository: productRepository,
+		ProductService:    productService,
+		ProductHandler:    productHandler,
+		UserRepository:    userRepository,
+		UserService:       userService,
+		UserHandler:       userHandler,
+		AuthRepository:    authRepository,
+		AuthService:       authService,
+		AuthHandler:       authHandler,
+		AuthMiddleware:    authMiddleware,
 	}
 }

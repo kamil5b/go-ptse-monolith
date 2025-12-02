@@ -2,9 +2,7 @@ package http
 
 import (
 	"go-modular-monolith/internal/app/core"
-	"go-modular-monolith/internal/domain/auth"
-	"go-modular-monolith/internal/domain/product"
-	"go-modular-monolith/internal/domain/user"
+	sharedctx "go-modular-monolith/internal/shared/context"
 
 	transportEcho "go-modular-monolith/internal/transports/http/echo"
 
@@ -27,25 +25,11 @@ func NewEchoServer(c *core.Container) *echo.Echo {
 
 	for _, route := range *routes {
 		switch h := route.Handler.(type) {
-		case func(product.Context) error:
+		case func(sharedctx.Context) error:
 			// Apply middlewares if any
 			finalHandler := applyMiddlewares(h, route.Middlewares)
 			route.Handler = finalHandler
-			v1 = transportEcho.AdapterToEchoRoutes(v1, &route, func(c echo.Context) product.Context {
-				return transportEcho.NewEchoContext(c)
-			}).Group("")
-		case func(user.Context) error:
-			// Apply middlewares if any
-			finalHandler := applyMiddlewares(h, route.Middlewares)
-			route.Handler = finalHandler
-			v1 = transportEcho.AdapterToEchoRoutes(v1, &route, func(c echo.Context) user.Context {
-				return transportEcho.NewEchoContext(c)
-			}).Group("")
-		case func(auth.Context) error:
-			// Apply middlewares if any
-			finalHandler := applyMiddlewares(h, route.Middlewares)
-			route.Handler = finalHandler
-			v1 = transportEcho.AdapterToEchoRoutes(v1, &route, func(c echo.Context) auth.Context {
+			v1 = transportEcho.AdapterToEchoRoutes(v1, &route, func(c echo.Context) sharedctx.Context {
 				return transportEcho.NewEchoContext(c)
 			}).Group("")
 		}

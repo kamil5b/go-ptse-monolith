@@ -2,8 +2,9 @@ package sql
 
 import (
 	"context"
-	"go-modular-monolith/internal/domain/user"
 	"time"
+
+	"go-modular-monolith/internal/modules/user/domain"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -42,7 +43,7 @@ func (r *SQLRepository) getTxFromContext(ctx context.Context) *sqlx.Tx {
 	return tx
 }
 
-func (r *SQLRepository) Create(ctx context.Context, u *user.User) error {
+func (r *SQLRepository) Create(ctx context.Context, u *domain.User) error {
 	query := `INSERT INTO users (id,name,email,created_at,created_by) VALUES (:id,:name,:email,:created_at,:created_by)`
 	tx := r.getTxFromContext(ctx)
 	if u.ID == "" {
@@ -57,8 +58,8 @@ func (r *SQLRepository) Create(ctx context.Context, u *user.User) error {
 	return err
 }
 
-func (r *SQLRepository) GetByID(ctx context.Context, id string) (*user.User, error) {
-	var u user.User
+func (r *SQLRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
+	var u domain.User
 	tx := r.getTxFromContext(ctx)
 	query := `SELECT id,name,email,created_at,created_by,updated_at,updated_by,deleted_at,deleted_by FROM users WHERE id=$1`
 	if tx != nil {
@@ -73,8 +74,24 @@ func (r *SQLRepository) GetByID(ctx context.Context, id string) (*user.User, err
 	return &u, nil
 }
 
-func (r *SQLRepository) List(ctx context.Context) ([]user.User, error) {
-	var lst []user.User
+func (r *SQLRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
+	var u domain.User
+	tx := r.getTxFromContext(ctx)
+	query := `SELECT id,name,email,created_at,created_by,updated_at,updated_by,deleted_at,deleted_by FROM users WHERE email=$1 AND deleted_at IS NULL`
+	if tx != nil {
+		if err := tx.Get(&u, query, email); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := r.db.Get(&u, query, email); err != nil {
+			return nil, err
+		}
+	}
+	return &u, nil
+}
+
+func (r *SQLRepository) List(ctx context.Context) ([]domain.User, error) {
+	var lst []domain.User
 	tx := r.getTxFromContext(ctx)
 	query := `SELECT id,name,email,created_at,created_by,updated_at,updated_by FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC`
 	if tx != nil {
@@ -89,7 +106,7 @@ func (r *SQLRepository) List(ctx context.Context) ([]user.User, error) {
 	return lst, nil
 }
 
-func (r *SQLRepository) Update(ctx context.Context, u *user.User) error {
+func (r *SQLRepository) Update(ctx context.Context, u *domain.User) error {
 	now := time.Now().UTC()
 	u.UpdatedAt = &now
 	tx := r.getTxFromContext(ctx)

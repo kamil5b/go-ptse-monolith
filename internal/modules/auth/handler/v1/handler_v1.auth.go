@@ -1,20 +1,21 @@
 package v1
 
 import (
-	"go-modular-monolith/internal/domain/auth"
+	"go-modular-monolith/internal/modules/auth/domain"
+	sharedctx "go-modular-monolith/internal/shared/context"
 	"net/http"
 )
 
 type Handler struct {
-	svc auth.AuthService
+	svc domain.Service
 }
 
-func NewHandler(s auth.AuthService) *Handler {
+func NewHandler(s domain.Service) *Handler {
 	return &Handler{svc: s}
 }
 
-func (h *Handler) Login(c auth.Context) error {
-	var req auth.LoginRequest
+func (h *Handler) Login(c sharedctx.Context) error {
+	var req domain.LoginRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
@@ -30,8 +31,8 @@ func (h *Handler) Login(c auth.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *Handler) Register(c auth.Context) error {
-	var req auth.RegisterRequest
+func (h *Handler) Register(c sharedctx.Context) error {
+	var req domain.RegisterRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
@@ -44,24 +45,24 @@ func (h *Handler) Register(c auth.Context) error {
 	return c.JSON(http.StatusCreated, resp)
 }
 
-func (h *Handler) Logout(c auth.Context) error {
+func (h *Handler) Logout(c sharedctx.Context) error {
 	userID := c.GetUserID()
 	if userID == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 	}
 
-	var req auth.LogoutRequest
+	var req domain.LogoutRequest
 	_ = c.Bind(&req)
 
 	if err := h.svc.Logout(c.GetContext(), userID, &req); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
-	return c.JSON(http.StatusOK, auth.MessageResponse{Message: "Logged out successfully", Success: true})
+	return c.JSON(http.StatusOK, domain.MessageResponse{Message: "Logged out successfully", Success: true})
 }
 
-func (h *Handler) RefreshToken(c auth.Context) error {
-	var req auth.RefreshTokenRequest
+func (h *Handler) RefreshToken(c sharedctx.Context) error {
+	var req domain.RefreshTokenRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
@@ -74,8 +75,8 @@ func (h *Handler) RefreshToken(c auth.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *Handler) ValidateToken(c auth.Context) error {
-	var req auth.ValidateTokenRequest
+func (h *Handler) ValidateToken(c sharedctx.Context) error {
+	var req domain.ValidateTokenRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
@@ -88,13 +89,13 @@ func (h *Handler) ValidateToken(c auth.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *Handler) ChangePassword(c auth.Context) error {
+func (h *Handler) ChangePassword(c sharedctx.Context) error {
 	userID := c.GetUserID()
 	if userID == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 	}
 
-	var req auth.ChangePasswordRequest
+	var req domain.ChangePasswordRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
@@ -103,10 +104,10 @@ func (h *Handler) ChangePassword(c auth.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
-	return c.JSON(http.StatusOK, auth.MessageResponse{Message: "Password changed successfully", Success: true})
+	return c.JSON(http.StatusOK, domain.MessageResponse{Message: "Password changed successfully", Success: true})
 }
 
-func (h *Handler) GetProfile(c auth.Context) error {
+func (h *Handler) GetProfile(c sharedctx.Context) error {
 	userID := c.GetUserID()
 	if userID == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
@@ -125,7 +126,7 @@ func (h *Handler) GetProfile(c auth.Context) error {
 	return c.JSON(http.StatusOK, resp.User)
 }
 
-func (h *Handler) GetSessions(c auth.Context) error {
+func (h *Handler) GetSessions(c sharedctx.Context) error {
 	userID := c.GetUserID()
 	if userID == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
@@ -139,7 +140,7 @@ func (h *Handler) GetSessions(c auth.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *Handler) RevokeSession(c auth.Context) error {
+func (h *Handler) RevokeSession(c sharedctx.Context) error {
 	userID := c.GetUserID()
 	if userID == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
@@ -154,10 +155,10 @@ func (h *Handler) RevokeSession(c auth.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
-	return c.JSON(http.StatusOK, auth.MessageResponse{Message: "Session revoked successfully", Success: true})
+	return c.JSON(http.StatusOK, domain.MessageResponse{Message: "Session revoked successfully", Success: true})
 }
 
-func (h *Handler) RevokeAllSessions(c auth.Context) error {
+func (h *Handler) RevokeAllSessions(c sharedctx.Context) error {
 	userID := c.GetUserID()
 	if userID == "" {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
@@ -167,5 +168,5 @@ func (h *Handler) RevokeAllSessions(c auth.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
-	return c.JSON(http.StatusOK, auth.MessageResponse{Message: "All sessions revoked successfully", Success: true})
+	return c.JSON(http.StatusOK, domain.MessageResponse{Message: "All sessions revoked successfully", Success: true})
 }

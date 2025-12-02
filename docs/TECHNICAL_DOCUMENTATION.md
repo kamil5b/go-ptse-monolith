@@ -1,7 +1,7 @@
 # Go Modular Monolith - Technical Documentation
 
-> **Version:** 1.1.0  
-> **Last Updated:** December 1, 2025  
+> **Version:** 2.0.0  
+> **Last Updated:** December 2, 2025  
 > **Go Version:** 1.24.7
 
 ---
@@ -15,14 +15,18 @@
 5. [Configuration](#configuration)
 6. [Feature Flags](#feature-flags)
 7. [Modules](#modules)
-8. [Domain Layer](#domain-layer)
-9. [Infrastructure Layer](#infrastructure-layer)
-10. [Transport Layer](#transport-layer)
-11. [Authentication & Middleware](#authentication--middleware)
-12. [Database & Migrations](#database--migrations)
-13. [API Reference](#api-reference)
-14. [Development Guide](#development-guide)
-15. [Roadmap](#roadmap)
+8. [Shared Kernel](#shared-kernel)
+9. [Domain Layer](#domain-layer)
+10. [Anti-Corruption Layer (ACL)](#anti-corruption-layer-acl)
+11. [Infrastructure Layer](#infrastructure-layer)
+12. [Transport Layer](#transport-layer)
+13. [Authentication & Middleware](#authentication--middleware)
+14. [Database & Migrations](#database--migrations)
+15. [API Reference](#api-reference)
+16. [Development Guide](#development-guide)
+17. [Dependency Linter](#dependency-linter)
+18. [Microservices Readiness](#microservices-readiness)
+19. [Roadmap](#roadmap)
 
 ---
 
@@ -34,6 +38,9 @@ Go Modular Monolith is a production-ready, modular monolithic application built 
 - **Swap database backends** (PostgreSQL/MongoDB) per module
 - **Version handlers, services, and repositories** independently
 - **Enable/disable features** through feature flags
+- **Maintain strict module isolation** with domain-per-module pattern
+- **Communicate between modules** via Anti-Corruption Layer (ACL) or Event Bus
+- **Prepare for microservices migration** with enforced dependency boundaries
 
 ### Key Technologies
 
@@ -48,6 +55,7 @@ Go Modular Monolith is a production-ready, modular monolithic application built 
 | Logging | Zerolog |
 | Password Hashing | golang.org/x/crypto/bcrypt |
 | UUID Generation | github.com/google/uuid |
+| Validation | go-playground/validator/v10 |
 
 ---
 
@@ -74,6 +82,33 @@ Go Modular Monolith is a production-ready, modular monolithic application built 
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Module Isolation Pattern
+
+Each module is fully isolated with its own domain types. Cross-module communication uses:
+- **Anti-Corruption Layer (ACL)** for synchronous, transactional operations
+- **Event Bus** for asynchronous, eventually consistent operations
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Shared Kernel                                  │
+│  (internal/shared: events, errors, context, uow, validator)             │
+└─────────────────────────────────────────────────────────────────────────┘
+         ▲                    ▲                    ▲
+         │                    │                    │
+┌────────┴────────┐  ┌───────┴────────┐  ┌───────┴────────┐
+│   Auth Module   │  │ Product Module │  │  User Module   │
+├─────────────────┤  ├────────────────┤  ├────────────────┤
+│  domain/        │  │  domain/       │  │  domain/       │
+│  handler/       │  │  handler/      │  │  handler/      │
+│  service/       │  │  service/      │  │  service/      │
+│  repository/    │  │  repository/   │  │  repository/   │
+│  acl/  ◄────────┼──┼────────────────┼──┤                │
+│  middleware/    │  │                │  │                │
+└─────────────────┘  └────────────────┘  └────────────────┘
+         │                                       ▲
+         └───────── ACL translates ─────────────┘
+```
+
 ### Dependency Flow
 
 ```
@@ -88,7 +123,9 @@ bootstrap/
    ▼
 Container (DI)
    │
+   ├── EventBus (shared)
    ├── Repository (SQL/MongoDB)
+   ├── ACL Adapters (cross-module)
    ├── Service (v1/noop)
    └── Handler (v1/noop)
    │
@@ -97,7 +134,21 @@ HTTP Server (Echo/Gin)
    │
    ▼
 Routes → Handlers → Services → Repositories → Database
+                        │
+                        ├── ACL (for cross-module)
+                        └── EventBus (for async events)
 ```
+
+### Dependency Rules
+
+| Source | Can Import | Cannot Import |
+|--------|------------|---------------|
+| Module domain | Shared kernel only | Other modules |
+| Module handler | Own domain, shared | Other modules |
+| Module service | Own domain, shared, own ACL | Other module implementations |
+| Module repository | Own domain, shared | Other modules |
+| Module ACL | Own domain, OTHER module domains | - |
+| Shared kernel | Standard library, external packages | Any module |
 
 ---
 
@@ -111,9 +162,11 @@ go-modular-monolith/
 │   ├── config.yaml                  # Application configuration
 │   └── featureflags.yaml            # Feature flag configuration
 ├── cmd/
-│   └── bootstrap/
-│       ├── bootstrap.server.go      # Server initialization
-│       └── bootstrap.migration.go   # Migration runner
+│   ├── bootstrap/
+│   │   ├── bootstrap.server.go      # Server initialization
+│   │   └── bootstrap.migration.go   # Migration runner
+│   └── lint-deps/
+│       └── main.go                  # Dependency linter CLI tool
 ├── internal/
 │   ├── app/
 │   │   ├── core/
@@ -123,36 +176,46 @@ go-modular-monolith/
 │   │   └── http/
 │   │       ├── echo.go              # Echo server setup
 │   │       ├── gin.go               # Gin server setup
+│   │       ├── helpers.go           # Middleware helpers
 │   │       └── routes.go            # Route definitions
-│   ├── domain/
-│   │   ├── auth/
-│   │   │   ├── model.auth.go        # Auth entities (Session, Credential)
-│   │   │   ├── interface.auth.go    # Handler/Service/Repo/Middleware interfaces
-│   │   │   ├── request.auth.go      # Auth request DTOs
-│   │   │   └── response.auth.go     # Auth response DTOs
-│   │   ├── product/
-│   │   │   ├── model.product.go     # Product entity
-│   │   │   ├── interface.product.go # Handler/Service/Repo interfaces
-│   │   │   ├── request.product.go   # Request DTOs
-│   │   │   └── response.product.go  # Response DTOs
-│   │   └── user/
-│   │       ├── model.user.go        # User entity
-│   │       ├── interface.user.go    # Handler/Service/Repo interfaces
-│   │       ├── request.user.go      # Request DTOs
-│   │       └── response.user.go     # Response DTOs
+│   ├── shared/                      # ⭐ NEW: Shared Kernel
+│   │   ├── context/
+│   │   │   └── context.go           # Shared HTTP context interface
+│   │   ├── errors/
+│   │   │   ├── errors.go            # Domain error types
+│   │   │   ├── http.go              # HTTP status mapping
+│   │   │   └── validation.go        # Validation error helpers
+│   │   ├── events/
+│   │   │   ├── event.go             # EventBus interface & Event struct
+│   │   │   ├── memory_bus.go        # In-memory EventBus implementation
+│   │   │   └── errors.go            # Event-related errors
+│   │   ├── uow/
+│   │   │   └── unit_of_work.go      # Unit of Work interface
+│   │   └── validator/
+│   │       └── validator.go         # Request validation utilities
 │   ├── infrastructure/
 │   │   ├── db/
 │   │   │   ├── sql/
 │   │   │   │   ├── sql.go           # PostgreSQL connection
 │   │   │   │   └── migration/       # SQL migration files
-│   │   │   └── mongo/
-│   │   │       ├── mongo.go         # MongoDB connection
-│   │   │       └── migration/       # MongoDB migration scripts
+│   │   │   ├── mongo/
+│   │   │   │   ├── mongo.go         # MongoDB connection
+│   │   │   │   └── migration/       # MongoDB migration scripts
+│   │   │   └── uow/
+│   │   │       └── unit_of_work.go  # UoW implementation
 │   │   ├── cache/                   # Redis (planned)
 │   │   ├── logger/                  # Logger infrastructure
 │   │   └── storage/                 # File storage (planned)
 │   ├── modules/
 │   │   ├── auth/
+│   │   │   ├── domain/              # ⭐ NEW: Module-specific domain
+│   │   │   │   ├── model.go         # Auth entities
+│   │   │   │   ├── interfaces.go    # Handler/Service/Repo/ACL interfaces
+│   │   │   │   ├── request.go       # Request DTOs
+│   │   │   │   ├── response.go      # Response DTOs
+│   │   │   │   └── events.go        # Domain events
+│   │   │   ├── acl/                 # ⭐ NEW: Anti-Corruption Layer
+│   │   │   │   └── user_creator.go  # ACL adapter for user module
 │   │   │   ├── handler/
 │   │   │   │   ├── v1/              # v1 handler implementation
 │   │   │   │   └── noop/            # No-op/disabled handler
@@ -165,28 +228,44 @@ go-modular-monolith/
 │   │   │       ├── mongo/           # MongoDB repository
 │   │   │       └── noop/            # No-op repository
 │   │   ├── product/
+│   │   │   ├── domain/              # ⭐ NEW: Module-specific domain
+│   │   │   │   ├── model.go
+│   │   │   │   ├── interfaces.go
+│   │   │   │   ├── request.go
+│   │   │   │   ├── response.go
+│   │   │   │   └── events.go
 │   │   │   ├── handler/
-│   │   │   │   ├── v1/              # v1 handler implementation
-│   │   │   │   └── noop/            # No-op/disabled handler
+│   │   │   │   ├── v1/
+│   │   │   │   └── noop/
 │   │   │   ├── service/
-│   │   │   │   ├── v1/              # v1 service implementation
-│   │   │   │   └── noop/            # No-op/disabled service
+│   │   │   │   ├── v1/
+│   │   │   │   └── noop/
 │   │   │   └── repository/
-│   │   │       ├── sql/             # PostgreSQL repository
-│   │   │       ├── mongo/           # MongoDB repository
-│   │   │       └── noop/            # No-op repository
-│   │   └── user/
-│   │       ├── handler/v1/          # v1 handler implementation
-│   │       ├── service/v1/          # v1 service implementation
-│   │       └── repository/sql/      # PostgreSQL repository
+│   │   │       ├── sql/
+│   │   │       ├── mongo/
+│   │   │       └── noop/
+│   │   ├── user/
+│   │   │   ├── domain/              # ⭐ NEW: Module-specific domain
+│   │   │   │   ├── model.go
+│   │   │   │   ├── interfaces.go
+│   │   │   │   ├── request.go
+│   │   │   │   ├── response.go
+│   │   │   │   └── events.go
+│   │   │   ├── handler/v1/
+│   │   │   ├── service/v1/
+│   │   │   └── repository/sql/
+│   │   └── unitofwork/              # Unit of Work implementations
+│   │       ├── default.unitofwork.go
+│   │       ├── sql.unitofwork.go
+│   │       └── mongo.unitofwork.go
 │   ├── transports/
 │   │   └── http/
 │   │       ├── echo/
-│   │       │   ├── adapter.echo.go  # Echo route adapter
-│   │       │   └── context.echo.go  # Echo context wrapper
+│   │       │   ├── adapter.echo.go
+│   │       │   └── context.echo.go
 │   │       └── gin/
-│   │           ├── adapter.gin.go   # Gin route adapter
-│   │           └── context.gin.go   # Gin context wrapper
+│   │           ├── adapter.gin.go
+│   │           └── context.gin.go
 │   └── proto/                       # gRPC protobuf definitions (planned)
 └── pkg/
     ├── constant/                    # Shared constants
@@ -195,8 +274,10 @@ go-modular-monolith/
     ├── model/
     │   ├── request.go               # Common request models
     │   └── response.go              # Common response models
-    └── routes/
-        └── route.go                 # Route struct definition
+    ├── routes/
+    │   └── route.go                 # Route struct definition
+    └── util/
+        └── context.util.go          # Context utilities
 ```
 
 ---
@@ -359,21 +440,52 @@ default:
 
 ### Module Structure
 
-Each business module follows a consistent structure:
+Each business module follows a **domain-per-module** pattern with isolated domain types:
 
 ```
 modules/<module>/
+├── domain/                              # Module's private domain (NEW)
+│   ├── model.go                         # Domain entities
+│   ├── interfaces.go                    # Handler, Service, Repository interfaces
+│   ├── request.go                       # Request DTOs
+│   ├── response.go                      # Response DTOs
+│   └── events.go                        # Domain events
+├── acl/                                 # Anti-Corruption Layer (if needed)
+│   └── <external>_<adapter>.go          # Adapters for external module dependencies
 ├── handler/
-│   ├── v1/handler_v1.<module>.go    # Version 1 implementation
-│   └── noop/handler_noop.<module>.go # No-op implementation
+│   ├── v1/handler_v1.<module>.go        # Version 1 implementation
+│   └── noop/handler_noop.<module>.go    # No-op implementation
 ├── service/
-│   ├── v1/service_v1.<module>.go    # Version 1 implementation
-│   └── noop/service_noop.<module>.go # No-op implementation
+│   ├── v1/service_v1.<module>.go        # Version 1 implementation
+│   └── noop/service_noop.<module>.go    # No-op implementation
 └── repository/
     ├── sql/repository_sql.<module>.go   # PostgreSQL implementation
     ├── mongo/repository_mongo.<module>.go # MongoDB implementation
     └── noop/repository_noop.<module>.go  # No-op implementation
 ```
+
+### Domain-Per-Module Pattern
+
+Each module owns its domain types, preventing cross-module coupling:
+
+```go
+// internal/modules/product/domain/interfaces.go
+package domain
+
+type ProductHandler interface {
+    Create(c sharedctx.Context) error
+    Get(c sharedctx.Context) error
+    List(c sharedctx.Context) error
+    Update(c sharedctx.Context) error
+    Delete(c sharedctx.Context) error
+}
+```
+
+**Benefits:**
+- **Module Isolation**: Each module can evolve independently
+- **No Cyclic Dependencies**: Modules don't import each other's domain packages
+- **Microservice-Ready**: Each module can be extracted as a separate service
+- **Clear Ownership**: Domain types belong to the module that uses them
 
 ### Current Modules
 
@@ -394,961 +506,443 @@ modules/<module>/
 
 ---
 
-## Domain Layer
+## Shared Kernel
 
-### Context Interface
+The shared kernel (`internal/shared/`) contains cross-cutting concerns that all modules can depend on. This is the **only** package that modules are allowed to import from outside their own domain.
 
-Each module defines a `Context` interface that abstracts HTTP framework specifics:
+### Package Structure
+
+```
+internal/shared/
+├── context/
+│   └── context.go       # Framework-agnostic HTTP context interface
+├── errors/
+│   ├── errors.go        # Domain error types
+│   ├── validation.go    # Validation error handling
+│   └── http.go          # HTTP status code mapping
+├── events/
+│   ├── event.go         # Event and EventBus interfaces
+│   ├── memory_bus.go    # In-memory EventBus implementation
+│   └── errors.go        # Event-related errors
+├── uow/
+│   └── unit_of_work.go  # Unit of Work interface
+└── validator/
+    └── validator.go     # Request validation utilities
+```
+
+### Shared Context (`sharedctx`)
+
+The `sharedctx.Context` interface provides a framework-agnostic abstraction for HTTP handlers:
 
 ```go
-// Product/User Context
+// internal/shared/context/context.go
+package sharedctx
+
 type Context interface {
-    BindJSON(obj any) error      // Bind JSON body
-    BindURI(obj any) error       // Bind URI parameters
-    BindQuery(obj any) error     // Bind query parameters
-    BindHeader(obj any) error    // Bind headers
-    Bind(obj any) error          // Auto-bind based on content type
-    JSON(code int, v any) error  // Send JSON response
-    Param(name string) string    // Get URL parameter
-    GetUserID() string           // Get authenticated user ID
-    Get(key string) any          // Get context value
-    GetContext() context.Context // Get Go context
-}
+    // Request binding
+    BindJSON(obj any) error
+    BindURI(obj any) error
+    BindQuery(obj any) error
+    BindHeader(obj any) error
+    Bind(obj any) error
 
-// Auth Context (extended with additional methods)
-type AuthContext interface {
-    Context
-    Set(key string, value any)                                                  // Set context value
-    GetHeader(key string) string                                                // Get request header
-    SetHeader(key, value string)                                                // Set response header
-    GetCookie(name string) (string, error)                                      // Get cookie value
-    SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool) // Set cookie
-    RemoveCookie(name string)                                                   // Remove cookie
-    GetClientIP() string                                                        // Get client IP address
-    GetUserAgent() string                                                       // Get user agent
-}
-```
+    // Response
+    JSON(code int, v any) error
 
-### Product Domain
+    // Parameters
+    Param(name string) string
+    GetUserID() string
+    Get(key string) any
+    GetContext() context.Context
 
-#### Entity
-
-```go
-type Product struct {
-    ID          string     `db:"id" json:"id" bson:"id"`
-    Name        string     `db:"name" json:"name" bson:"name"`
-    Description string     `db:"description" json:"description" bson:"description"`
-    CreatedAt   time.Time  `db:"created_at" json:"created_at" bson:"created_at"`
-    CreatedBy   string     `db:"created_by" json:"created_by" bson:"created_by"`
-    UpdatedAt   *time.Time `db:"updated_at" json:"updated_at,omitempty"`
-    UpdatedBy   *string    `db:"updated_by" json:"updated_by,omitempty"`
-    DeletedAt   *time.Time `db:"deleted_at" json:"deleted_at,omitempty"`
-    DeletedBy   *string    `db:"deleted_by" json:"deleted_by,omitempty"`
+    // Auth-specific (for middleware)
+    Set(key string, value any)
+    GetHeader(key string) string
+    SetHeader(key, value string)
+    GetCookie(name string) (string, error)
+    SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool)
+    RemoveCookie(name string)
+    GetClientIP() string
+    GetUserAgent() string
 }
 ```
 
-#### Interfaces
-
+**Usage in Handlers:**
 ```go
+// All modules use sharedctx.Context instead of per-module Context
 type ProductHandler interface {
-    Create(c Context) error
-    Get(c Context) error
-    List(c Context) error
-    Update(c Context) error
-    Delete(c Context) error
-}
-
-type ProductService interface {
-    Create(ctx context.Context, req *CreateProductRequest, createdBy string) (*Product, error)
-    Get(ctx context.Context, id string) (*Product, error)
-    List(ctx context.Context) ([]Product, error)
-    Update(ctx context.Context, req *UpdateProductRequest, updatedBy string) (*Product, error)
-    Delete(ctx context.Context, id, deletedBy string) error
-}
-
-type ProductRepository interface {
-    StartContext(ctx context.Context) context.Context
-    DeferErrorContext(ctx context.Context, err error)
-    Create(ctx context.Context, p *Product) error
-    GetByID(ctx context.Context, id string) (*Product, error)
-    List(ctx context.Context) ([]Product, error)
-    Update(ctx context.Context, p *Product) error
-    SoftDelete(ctx context.Context, id, deletedBy string) error
+    Create(c sharedctx.Context) error
+    Get(c sharedctx.Context) error
 }
 ```
 
-### User Domain
+### Domain Errors
 
-#### Entity
+Structured error types for consistent error handling:
 
 ```go
-type User struct {
-    ID        string     `db:"id" json:"id" bson:"id"`
-    Name      string     `db:"name" json:"name" bson:"name"`
-    Email     string     `db:"email" json:"email" bson:"email"`
-    CreatedAt time.Time  `db:"created_at" json:"created_at" bson:"created_at"`
-    CreatedBy string     `db:"created_by" json:"created_by" bson:"created_by"`
-    UpdatedAt *time.Time `db:"updated_at" json:"updated_at,omitempty"`
-    UpdatedBy *string    `db:"updated_by" json:"updated_by,omitempty"`
-    DeletedAt *time.Time `db:"deleted_at" json:"deleted_at,omitempty"`
-    DeletedBy *string    `db:"deleted_by" json:"deleted_by,omitempty"`
+// internal/shared/errors/errors.go
+package sharederrors
+
+type ErrorType string
+
+const (
+    ErrTypeNotFound       ErrorType = "NOT_FOUND"
+    ErrTypeValidation     ErrorType = "VALIDATION"
+    ErrTypeUnauthorized   ErrorType = "UNAUTHORIZED"
+    ErrTypeForbidden      ErrorType = "FORBIDDEN"
+    ErrTypeConflict       ErrorType = "CONFLICT"
+    ErrTypeInternal       ErrorType = "INTERNAL"
+)
+
+type DomainError struct {
+    Type    ErrorType
+    Message string
+    Err     error
 }
+
+// Helper constructors
+func NotFound(resource, id string) *DomainError
+func Validation(message string) *DomainError
+func Unauthorized(message string) *DomainError
+func Forbidden(message string) *DomainError
+func Conflict(message string) *DomainError
+func Internal(err error) *DomainError
 ```
 
-### Auth Domain
+### Event Bus
 
-#### Session Entity
+Asynchronous inter-module communication without direct dependencies:
 
 ```go
-type Session struct {
-    ID        string     `db:"id" json:"id" bson:"id"`
-    UserID    string     `db:"user_id" json:"user_id" bson:"user_id"`
-    Token     string     `db:"token" json:"token" bson:"token"`
-    ExpiresAt time.Time  `db:"expires_at" json:"expires_at" bson:"expires_at"`
-    CreatedAt time.Time  `db:"created_at" json:"created_at" bson:"created_at"`
-    UpdatedAt *time.Time `db:"updated_at" json:"updated_at,omitempty" bson:"updated_at,omitempty"`
-    RevokedAt *time.Time `db:"revoked_at" json:"revoked_at,omitempty" bson:"revoked_at,omitempty"`
-    UserAgent string     `db:"user_agent" json:"user_agent" bson:"user_agent"`
-    IPAddress string     `db:"ip_address" json:"ip_address" bson:"ip_address"`
+// internal/shared/events/event.go
+package events
+
+type Event interface {
+    EventName() string
+    OccurredAt() time.Time
 }
+
+type EventBus interface {
+    Publish(ctx context.Context, event Event) error
+    Subscribe(eventName string, handler EventHandler) error
+}
+
+type EventHandler func(ctx context.Context, event Event) error
 ```
 
-#### Credential Entity
-
+**In-Memory Implementation:**
 ```go
-type Credential struct {
-    ID           string     `db:"id" json:"id" bson:"id"`
-    UserID       string     `db:"user_id" json:"user_id" bson:"user_id"`
-    Username     string     `db:"username" json:"username" bson:"username"`
-    Email        string     `db:"email" json:"email" bson:"email"`
-    PasswordHash string     `db:"password_hash" json:"-" bson:"password_hash"`
-    IsActive     bool       `db:"is_active" json:"is_active" bson:"is_active"`
-    LastLoginAt  *time.Time `db:"last_login_at" json:"last_login_at,omitempty" bson:"last_login_at,omitempty"`
-    CreatedAt    time.Time  `db:"created_at" json:"created_at" bson:"created_at"`
-    UpdatedAt    *time.Time `db:"updated_at" json:"updated_at,omitempty" bson:"updated_at,omitempty"`
-    DeletedAt    *time.Time `db:"deleted_at" json:"deleted_at,omitempty" bson:"deleted_at,omitempty"`
+// internal/shared/events/memory_bus.go
+type InMemoryEventBus struct {
+    handlers map[string][]EventHandler
+    mu       sync.RWMutex
 }
+
+func NewInMemoryEventBus() *InMemoryEventBus
+func (b *InMemoryEventBus) Publish(ctx context.Context, event Event) error
+func (b *InMemoryEventBus) Subscribe(eventName string, handler EventHandler) error
 ```
 
-#### Token Claims
-
+**Domain Events Example:**
 ```go
-type TokenClaims struct {
-    UserID   string   `json:"user_id"`
-    Username string   `json:"username"`
-    Email    string   `json:"email"`
-    Roles    []string `json:"roles,omitempty"`
-}
-```
-
-#### Auth Interfaces
-
-```go
-type AuthHandler interface {
-    Login(c Context) error
-    Register(c Context) error
-    Logout(c Context) error
-    RefreshToken(c Context) error
-    ValidateToken(c Context) error
-    ChangePassword(c Context) error
-    GetProfile(c Context) error
-    GetSessions(c Context) error
-    RevokeSession(c Context) error
-    RevokeAllSessions(c Context) error
+// internal/modules/user/domain/events.go
+type UserCreated struct {
+    UserID    string
+    Email     string
+    Name      string
+    Timestamp time.Time
 }
 
-type AuthService interface {
-    // Authentication
-    Login(ctx context.Context, req *LoginRequest, userAgent, ipAddress string) (*LoginResponse, error)
-    Register(ctx context.Context, req *RegisterRequest) (*RegisterResponse, error)
-    Logout(ctx context.Context, userID string, req *LogoutRequest) error
-    RefreshToken(ctx context.Context, refreshToken string) (*RefreshTokenResponse, error)
-    ValidateToken(ctx context.Context, token string) (*ValidateTokenResponse, error)
-
-    // Password management
-    ChangePassword(ctx context.Context, userID string, req *ChangePasswordRequest) error
-    ResetPassword(ctx context.Context, req *ResetPasswordRequest) error
-    ConfirmResetPassword(ctx context.Context, req *ConfirmResetPasswordRequest) error
-
-    // Session management
-    GetSessions(ctx context.Context, userID string) (*SessionListResponse, error)
-    RevokeSession(ctx context.Context, userID, sessionID string) error
-    RevokeAllSessions(ctx context.Context, userID string) error
-
-    // Token utilities
-    GenerateAccessToken(claims *TokenClaims) (string, error)
-    GenerateRefreshToken(userID string) (string, error)
-    ParseToken(token string) (*TokenClaims, error)
-
-    // Password utilities
-    HashPassword(password string) (string, error)
-    VerifyPassword(hashedPassword, password string) error
-}
-
-type AuthRepository interface {
-    StartContext(ctx context.Context) context.Context
-    DeferErrorContext(ctx context.Context, err error)
-
-    // Credential operations
-    CreateCredential(ctx context.Context, cred *Credential) error
-    GetCredentialByUsername(ctx context.Context, username string) (*Credential, error)
-    GetCredentialByEmail(ctx context.Context, email string) (*Credential, error)
-    GetCredentialByUserID(ctx context.Context, userID string) (*Credential, error)
-    UpdateCredential(ctx context.Context, cred *Credential) error
-    UpdatePassword(ctx context.Context, userID, passwordHash string) error
-    UpdateLastLogin(ctx context.Context, userID string) error
-
-    // Session operations
-    CreateSession(ctx context.Context, session *Session) error
-    GetSessionByToken(ctx context.Context, token string) (*Session, error)
-    GetSessionByID(ctx context.Context, id string) (*Session, error)
-    GetSessionsByUserID(ctx context.Context, userID string) ([]Session, error)
-    RevokeSession(ctx context.Context, sessionID string) error
-    RevokeAllUserSessions(ctx context.Context, userID string) error
-    DeleteExpiredSessions(ctx context.Context) error
-}
+func (e UserCreated) EventName() string    { return "user.created" }
+func (e UserCreated) OccurredAt() time.Time { return e.Timestamp }
 ```
 
 ---
 
-## Infrastructure Layer
+## Anti-Corruption Layer (ACL)
 
-### PostgreSQL Connection
+When a module needs to interact with another module, it uses an **Anti-Corruption Layer** to maintain isolation. The ACL translates between module boundaries without creating direct dependencies.
 
+### Pattern Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Auth Module                                                  │
+│                                                              │
+│  ┌──────────┐    ┌─────────────────┐    ┌───────────────┐  │
+│  │ Service  │───>│ UserCreator     │───>│ ACL Adapter   │──┼──> User Repository
+│  │          │    │ (interface)     │    │               │  │
+│  └──────────┘    └─────────────────┘    └───────────────┘  │
+│                                                              │
+│  Auth module defines the interface it needs.                │
+│  ACL adapter wraps the actual implementation.               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Implementation Example
+
+**1. Module defines its interface (what it needs):**
 ```go
-// internal/infrastructure/db/sql/sql.go
-func Open(dsn string) (*sqlx.DB, error) {
-    db, err := sqlx.Connect("postgres", dsn)
-    if err != nil {
-        return nil, err
-    }
-    db.SetMaxOpenConns(25)
-    db.SetMaxIdleConns(25)
-    db.SetConnMaxLifetime(5 * time.Minute)
-    return db, nil
+// internal/modules/auth/domain/interfaces.go
+package domain
+
+// UserCreator is an ACL interface for creating users during registration
+// This decouples auth from direct user module dependency
+type UserCreator interface {
+    CreateUser(ctx context.Context, name, email string) (string, error)
 }
 ```
 
-**Connection Pool Settings:**
-- Max Open Connections: 25
-- Max Idle Connections: 25
-- Connection Max Lifetime: 5 minutes
-
-### MongoDB Connection
-
+**2. ACL adapter implements the interface:**
 ```go
-// internal/infrastructure/db/mongo/mongo.go
-func OpenMongo(uri string) (*mongo.Client, error) {
-    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-    defer cancel()
-    client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-    if err != nil {
-        return nil, err
-    }
-    return client, nil
+// internal/modules/auth/acl/user_creator.go
+package acl
+
+import (
+    userdomain "go-modular-monolith/internal/modules/user/domain"
+)
+
+// UserCreatorAdapter adapts the user repository to auth's UserCreator interface
+type UserCreatorAdapter struct {
+    userRepo userdomain.UserRepository
 }
 
-func CloseMongo(client *mongo.Client) error {
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-    defer cancel()
-    return client.Disconnect(ctx)
+func NewUserCreatorAdapter(userRepo userdomain.UserRepository) *UserCreatorAdapter {
+    return &UserCreatorAdapter{userRepo: userRepo}
+}
+
+func (a *UserCreatorAdapter) CreateUser(ctx context.Context, name, email string) (string, error) {
+    user := &userdomain.User{
+        ID:        generateID(),
+        Name:      name,
+        Email:     email,
+        CreatedAt: time.Now(),
+        CreatedBy: "system",
+    }
+    if err := a.userRepo.Create(ctx, user); err != nil {
+        return "", err
+    }
+    return user.ID, nil
 }
 ```
+
+**3. Container wires the ACL:**
+```go
+// internal/app/core/container.go
+import (
+    authacl "go-modular-monolith/internal/modules/auth/acl"
+)
+
+// Create ACL adapter
+userCreator := authacl.NewUserCreatorAdapter(userRepository)
+
+// Inject into auth service
+authService = authServiceV1.NewService(
+    authRepository,
+    userCreator, // ACL adapter, not direct user repository
+    sessionDuration,
+    jwtSecret,
+)
+```
+
+### ACL vs Events
+
+| Aspect | ACL | Events |
+|--------|-----|--------|
+| **Communication** | Synchronous | Asynchronous |
+| **Consistency** | Strong (transactional) | Eventual |
+| **Coupling** | Interface-level | Event contract |
+| **Use Case** | Registration (need user ID immediately) | Notifications, analytics |
+| **Testing** | Easy to mock | Requires event bus setup |
+
+### When to Use ACL
+
+✅ **Use ACL when:**
+- You need synchronous, transactional operations
+- The calling module needs an immediate response
+- You want explicit, type-safe interfaces
+- Testing with mocks is important
+
+❌ **Use Events when:**
+- Operations can be eventually consistent
+- Multiple modules need to react to the same event
+- You want fire-and-forget behavior
+- Modules should be completely decoupled
 
 ---
 
-## Transport Layer
+## Dependency Linter
 
-### HTTP Framework Abstraction
+The project includes a custom dependency linter (`cmd/lint-deps/main.go`) that enforces module isolation rules.
 
-The transport layer provides adapters that convert framework-specific contexts to domain contexts:
-
-#### Echo Adapter
-
-```go
-func AdapterToEchoRoutes[T any](
-    e *echo.Group,
-    route *routes.Route,
-    domainContext func(echo.Context) T,
-) *echo.Group {
-    handler := func(ctx echo.Context) error {
-        return route.Handler.(func(T) error)(domainContext(ctx))
-    }
-    // Register route based on method
-    switch route.Method {
-    case echo.GET:
-        e.GET(route.Path, handler)
-    // ... other methods
-    }
-    return e
-}
-```
-
-#### Gin Adapter
-
-```go
-func AdapterToGinRoutes[T any](
-    r *gin.RouterGroup,
-    route *routes.Route,
-    domainContext func(*gin.Context) T,
-) *gin.RouterGroup {
-    handler := func(ctx *gin.Context) {
-        _ = route.Handler.(func(T) error)(domainContext(ctx))
-    }
-    // Register route based on method
-    switch route.Method {
-    case "GET":
-        r.GET(route.Path, handler)
-    // ... other methods
-    }
-    return r
-}
-```
-
-### Route Definition
-
-```go
-type Route struct {
-    Method      string
-    Path        string
-    Handler     any
-    Middlewares []any
-    Flags       []string
-}
-```
-
----
-
-## Authentication & Middleware
-
-### Authentication Types
-
-The system supports multiple authentication methods:
-
-| Type | Description |
-|------|-------------|
-| `jwt` | JSON Web Token authentication via Bearer token |
-| `session` | Session-based authentication via cookies |
-| `basic` | HTTP Basic Authentication |
-| `none` | No authentication required |
-
-### Middleware Configuration
-
-```go
-type MiddlewareConfig struct {
-    AuthType       AuthType   // jwt, session, basic, none
-    SkipPaths      []string   // Paths to skip authentication
-    SessionCookie  string     // Cookie name for session auth
-    BasicAuthRealm string     // Realm for Basic Auth
-}
-
-func DefaultMiddlewareConfig() MiddlewareConfig {
-    return MiddlewareConfig{
-        AuthType:       AuthTypeJWT,
-        SkipPaths:      []string{"/auth/login", "/auth/register", "/health"},
-        SessionCookie:  "session_token",
-        BasicAuthRealm: "Restricted",
-    }
-}
-```
-
-### Middleware Interface
-
-```go
-type Middleware interface {
-    // Authenticate validates the request and sets auth context
-    Authenticate() func(next func(Context) error) func(Context) error
-
-    // RequireAuth ensures the request is authenticated
-    RequireAuth() func(next func(Context) error) func(Context) error
-
-    // OptionalAuth tries to authenticate but allows unauthenticated requests
-    OptionalAuth() func(next func(Context) error) func(Context) error
-
-    // RequireRoles ensures the authenticated user has specific roles
-    RequireRoles(roles ...string) func(next func(Context) error) func(Context) error
-}
-```
-
-### JWT Configuration
-
-```go
-type AuthConfig struct {
-    JWTSecret            string        // JWT signing secret
-    AccessTokenDuration  time.Duration // Default: 15 minutes
-    RefreshTokenDuration time.Duration // Default: 7 days
-    SessionDuration      time.Duration // Default: 24 hours
-    BcryptCost           int           // Default: bcrypt.DefaultCost
-}
-```
-
-### Protected Routes
-
-Routes can be protected using middleware chains:
-
-```go
-{
-    Method:      "GET",
-    Path:        "/user",
-    Handler:     userHandler.List,
-    Middlewares: []any{authMiddleware.Authenticate(), authMiddleware.RequireAuth()},
-    Flags:       []string{"protected"},
-}
-```
-
----
-
-## Database & Migrations
-
-### SQL Migrations (Goose)
-
-Migrations are located in `internal/infrastructure/db/sql/migration/`
-
-#### Users Table
-
-```sql
--- 00001_create_users_table.sql
--- +goose Up
-CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY,
-  email TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  active BOOLEAN NOT NULL DEFAULT false,
-  activation_token TEXT,
-  reset_token TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- +goose Down
-DROP TABLE IF EXISTS users;
-```
-
-#### Products Table
-
-```sql
--- 00002_create_products_table.sql
--- +goose Up
-CREATE TABLE IF NOT EXISTS products (
-  id UUID PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  created_by UUID,
-  updated_at TIMESTAMP WITH TIME ZONE,
-  updated_by UUID,
-  deleted_at TIMESTAMP WITH TIME ZONE,
-  deleted_by UUID
-);
-
--- +goose Down
-DROP TABLE IF EXISTS products;
-```
-
-#### Auth Tables
-
-```sql
--- 00003_create_auth_tables.sql
--- Auth credentials table
-CREATE TABLE IF NOT EXISTS auth_credentials (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    is_active BOOLEAN DEFAULT true,
-    last_login_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE,
-    deleted_at TIMESTAMP WITH TIME ZONE
-);
-
--- Auth sessions table
-CREATE TABLE IF NOT EXISTS auth_sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token VARCHAR(255) UNIQUE NOT NULL,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE,
-    revoked_at TIMESTAMP WITH TIME ZONE,
-    user_agent TEXT,
-    ip_address VARCHAR(45)
-);
-
--- Indexes for faster lookups
-CREATE INDEX IF NOT EXISTS idx_auth_credentials_username ON auth_credentials(username) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_auth_credentials_email ON auth_credentials(email) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_auth_credentials_user_id ON auth_credentials(user_id) WHERE deleted_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token) WHERE revoked_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id) WHERE revoked_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires_at);
-```
-
-### MongoDB Migrations
-
-MongoDB migrations are JavaScript files executed via `mongosh` CLI.  
-Located in `internal/infrastructure/db/mongo/migration/`
-
-### Running Migrations
+### Running the Linter
 
 ```bash
-# SQL migrations
-go run . migration sql up    # Apply all pending
-go run . migration sql down  # Rollback last migration
-
-# MongoDB migrations
-go run . migration mongo up  # Apply all .js files in order
+go run cmd/lint-deps/main.go
 ```
+
+### Rules Enforced
+
+1. **No Cross-Module Imports**: Modules cannot import from other modules' packages
+2. **ACL Exception**: `acl/` folders are allowed to import other modules (they're the translation layer)
+3. **Shared Kernel Allowed**: All modules can import from `internal/shared/`
+
+### Example Output
+
+```
+✅ Checking dependencies...
+
+❌ Violation in internal/modules/auth/service/v1/service_v1.auth.go:
+   - Imports "go-modular-monolith/internal/modules/user/repository/sql"
+   - Module "auth" should not import from module "user"
+
+Fix: Use an ACL adapter or events for cross-module communication.
+```
+
+When properly configured:
+```
+✅ Checking dependencies...
+✅ No cross-module dependency violations found!
+```
+
+### Linter Configuration
+
+The linter automatically:
+- Scans all `.go` files in `internal/modules/`
+- Identifies module boundaries by folder names
+- Allows imports from `internal/shared/`
+- Allows imports within ACL folders to other modules
 
 ---
 
-## API Reference
+## Domain Layer
 
-### Base URL
+### Shared Context Interface
 
-```
-http://localhost:8080/v1
-```
+All modules use `sharedctx.Context` from the shared kernel for framework-agnostic HTTP handling:
 
-### Authentication
+```go
+import sharedctx "go-modular-monolith/internal/shared/context"
 
-#### Login
-```http
-POST /auth/login
-Content-Type: application/json
-
-{
-  "username": "johndoe",
-  "password": "password123"
-}
-```
-
-**Response:** `200 OK`
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "refresh_token": "base64-encoded-token",
-  "token_type": "Bearer",
-  "expires_in": 900,
-  "expires_at": "2025-12-01T00:15:00Z",
-  "user": {
-    "id": "uuid",
-    "username": "johndoe",
-    "email": "john@example.com"
-  }
-}
-```
-
-#### Register
-```http
-POST /auth/register
-Content-Type: application/json
-
-{
-  "username": "johndoe",
-  "email": "john@example.com",
-  "password": "password123",
-  "name": "John Doe"
-}
-```
-
-**Validation:**
-- `username`: Required, min 3, max 50 characters
-- `email`: Required, valid email format
-- `password`: Required, min 8 characters
-- `name`: Required
-
-**Response:** `201 Created`
-```json
-{
-  "user": {
-    "id": "uuid",
-    "username": "johndoe",
-    "email": "john@example.com",
-    "name": "John Doe"
-  },
-  "message": "Registration successful"
-}
-```
-
-#### Refresh Token
-```http
-POST /auth/refresh
-Content-Type: application/json
-
-{
-  "refresh_token": "base64-encoded-token"
-}
-```
-
-**Response:** `200 OK`
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "refresh_token": "base64-encoded-token",
-  "token_type": "Bearer",
-  "expires_in": 900,
-  "expires_at": "2025-12-01T00:15:00Z"
-}
-```
-
-#### Validate Token
-```http
-POST /auth/validate
-Content-Type: application/json
-
-{
-  "token": "eyJhbGciOiJIUzI1NiIs..."
-}
-```
-
-**Response:** `200 OK`
-```json
-{
-  "valid": true,
-  "user": {
-    "id": "uuid",
-    "username": "johndoe",
-    "email": "john@example.com"
-  }
-}
-```
-
-#### Logout (Protected)
-```http
-POST /auth/logout
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "refresh_token": "base64-encoded-token",
-  "all_devices": false
-}
-```
-
-**Response:** `200 OK`
-```json
-{
-  "message": "Logged out successfully",
-  "success": true
-}
-```
-
-#### Get Profile (Protected)
-```http
-GET /auth/profile
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK`
-```json
-{
-  "id": "uuid",
-  "username": "johndoe",
-  "email": "john@example.com"
-}
-```
-
-#### Change Password (Protected)
-```http
-PUT /auth/password
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "old_password": "oldpassword123",
-  "new_password": "newpassword456"
-}
-```
-
-**Response:** `200 OK`
-```json
-{
-  "message": "Password changed successfully",
-  "success": true
-}
-```
-
-#### Get Sessions (Protected)
-```http
-GET /auth/sessions
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK`
-```json
-{
-  "sessions": [
-    {
-      "id": "session-uuid",
-      "user_agent": "Mozilla/5.0...",
-      "ip_address": "192.168.1.1",
-      "created_at": "2025-12-01T00:00:00Z",
-      "expires_at": "2025-12-08T00:00:00Z",
-      "current": true
-    }
-  ]
-}
-```
-
-#### Revoke Session (Protected)
-```http
-DELETE /auth/sessions/:id
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK`
-```json
-{
-  "message": "Session revoked successfully",
-  "success": true
-}
-```
-
-#### Revoke All Sessions (Protected)
-```http
-DELETE /auth/sessions
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK`
-```json
-{
-  "message": "All sessions revoked successfully",
-  "success": true
-}
-```
-
-### Products (Protected)
-
-All product endpoints require authentication.
-
-#### List Products
-```http
-GET /product
-Authorization: Bearer <access_token>
-```
-
-**Response:**
-```json
-[
-  {
-    "id": "uuid",
-    "name": "Product Name",
-    "description": "Product description",
-    "created_at": "2025-12-01T00:00:00Z",
-    "created_by": "user-uuid"
-  }
-]
-```
-
-#### Create Product
-```http
-POST /product
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "name": "Product Name",
-  "description": "Product description"
-}
-```
-
-**Response:** `201 Created`
-```json
-{
-  "id": "uuid",
-  "name": "Product Name",
-  "description": "Product description",
-  "created_at": "2025-12-01T00:00:00Z",
-  "created_by": "user-uuid"
-}
-```
-
-### Users (Protected)
-
-All user endpoints require authentication.
-
-#### List Users
-```http
-GET /user
-Authorization: Bearer <access_token>
-```
-
-#### Get User
-```http
-GET /user/:id
-Authorization: Bearer <access_token>
-```
-
-#### Create User
-```http
-POST /user
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "name": "John Doe",
-  "email": "john@example.com"
-}
-```
-
-**Validation:**
-- `name`: Required
-- `email`: Required, must be valid email format
-
-#### Update User
-```http
-PUT /user/:id
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "name": "Updated Name",
-  "email": "updated@example.com"
-}
-```
-
-#### Delete User
-```http
-DELETE /user/:id
-Authorization: Bearer <access_token>
-```
-
-**Response:** `200 OK`
-```json
-{
-  "status": "deleted"
+type ProductHandler interface {
+    Create(c sharedctx.Context) error
+    Get(c sharedctx.Context) error
+    List(c sharedctx.Context) error
+    Update(c sharedctx.Context) error
+    Delete(c sharedctx.Context) error
 }
 ```
 
 ---
 
-## Development Guide
+## Microservices Readiness
 
-### Adding a New Module
+### Current Readiness Score: 8/10
 
-1. **Create Domain Types**
-   ```
-   internal/domain/<module>/
-   ├── model.<module>.go      # Entity definition
-   ├── interface.<module>.go  # Handler/Service/Repo interfaces
-   ├── request.<module>.go    # Request DTOs
-   └── response.<module>.go   # Response DTOs
-   ```
+The architecture has been significantly improved to support future microservices migration.
 
-2. **Implement Repository**
-   ```
-   internal/modules/<module>/repository/
-   ├── sql/repository_sql.<module>.go
-   └── mongo/repository_mongo.<module>.go
-   ```
+### Readiness Assessment
 
-3. **Implement Service**
-   ```
-   internal/modules/<module>/service/
-   └── v1/service_v1.<module>.go
-   ```
+| Aspect | Score | Status | Notes |
+|--------|-------|--------|-------|
+| **Module Isolation** | ✅ 10/10 | Complete | Domain-per-module, no cross-module imports |
+| **Dependency Direction** | ✅ 9/10 | Complete | ACL pattern, dependency linter enforced |
+| **Database per Module** | 🟡 7/10 | Partial | Shared DB, but separate tables per module |
+| **API Contracts** | ✅ 8/10 | Good | Clean request/response DTOs per module |
+| **Configuration** | ✅ 8/10 | Good | Feature flags support module-level config |
+| **Event-Driven** | 🟡 7/10 | Partial | EventBus ready, not fully utilized |
+| **Testing** | 🔴 4/10 | Needs Work | Unit tests not implemented yet |
 
-4. **Implement Handler**
-   ```
-   internal/modules/<module>/handler/
-   └── v1/handler_v1.<module>.go
-   ```
+### Migration Path
 
-5. **Register in Container**
-   Update `internal/app/core/container.go`
+When ready to migrate to microservices:
 
-6. **Add Routes**
-   Update `internal/app/http/routes.go`
-
-7. **Add Feature Flags**
-   Update `config/featureflags.yaml`
-
-### Transaction Handling
-
-Repositories support transactional operations:
-
-```go
-func (r *SQLRepository) StartContext(ctx context.Context) context.Context {
-    tx := r.db.MustBeginTx(ctx, nil)
-    return context.WithValue(ctx, driverName, tx)
-}
-
-func (r *SQLRepository) DeferErrorContext(ctx context.Context, err error) {
-    tx := r.getTxFromContext(ctx)
-    if tx != nil {
-        if err != nil {
-            tx.Rollback()
-        } else {
-            tx.Commit()
-        }
-    }
-}
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CURRENT: Modular Monolith                    │
+│                                                                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                     │
+│  │ Product  │  │   User   │  │   Auth   │  (Shared Process)   │
+│  │ Module   │  │  Module  │  │  Module  │                     │
+│  └──────────┘  └──────────┘  └──────────┘                     │
+│        │            │             │                            │
+│        └────────────┴─────────────┘                            │
+│                     │                                          │
+│              Shared Database                                   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    FUTURE: Microservices                        │
+│                                                                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │ Product Svc  │  │  User Svc    │  │  Auth Svc    │         │
+│  │              │  │              │  │              │         │
+│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │         │
+│  │ │Product DB│ │  │ │ User DB  │ │  │ │ Auth DB  │ │         │
+│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+│         │                 │                 │                  │
+│         └─────────────────┴─────────────────┘                  │
+│                           │                                    │
+│                    Message Queue / API Gateway                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Soft Delete Pattern
+### Step-by-Step Migration
 
-All entities support soft delete with audit fields:
+1. **Extract Module as Service**
+   ```bash
+   # Each module folder becomes its own service
+   internal/modules/product/ → product-service/
+   ```
 
-```go
-func (r *SQLRepository) SoftDelete(ctx context.Context, id, deletedBy string) error {
-    now := time.Now().UTC()
-    query := `UPDATE products SET deleted_at=$1, deleted_by=$2 WHERE id=$3`
-    _, err := r.db.Exec(query, now, deletedBy, id)
-    return err
-}
-```
+2. **Replace ACL with HTTP/gRPC**
+   ```go
+   // Before (ACL in monolith)
+   type UserCreatorAdapter struct {
+       userRepo userdomain.UserRepository
+   }
+   
+   // After (HTTP client in microservice)
+   type UserServiceClient struct {
+       baseURL string
+       client  *http.Client
+   }
+   ```
 
-### Common Response Models
+3. **Replace In-Memory EventBus**
+   ```go
+   // Before (in-memory)
+   bus := events.NewInMemoryEventBus()
+   
+   // After (distributed)
+   bus := events.NewKafkaEventBus(brokers)
+   // or
+   bus := events.NewRabbitMQEventBus(amqpURL)
+   ```
 
-```go
-// Pagination Request
-type PaginationRequest struct {
-    Page  int `json:"page" binding:"required,min=1"`
-    Limit int `json:"limit" binding:"required,min=5,max=100"`
-}
+4. **Database per Service**
+   - Each service gets its own database
+   - Use database migrations from `internal/infrastructure/db/*/migration/`
 
-func (p *PaginationRequest) Offset() int {
-    return (p.Page - 1) * p.Limit
-}
+### What's Already Microservice-Ready
 
-// Common Response
-type CommonResponse struct {
-    RequestID string `json:"requestId"`
-}
+✅ **Module Isolation**: Each module is self-contained with its own domain  
+✅ **ACL Pattern**: Cross-module communication via adapters (easy to swap for HTTP clients)  
+✅ **Event Bus Interface**: In-memory implementation can be swapped for Kafka/RabbitMQ  
+✅ **Feature Flags**: Enable/disable modules independently  
+✅ **Repository Pattern**: Database access abstracted behind interfaces  
+✅ **Dependency Linter**: Enforces clean boundaries  
 
-// Paginated Response
-type PaginatedResponse[T any] struct {
-    CommonResponse
-    Metadata PaginationMetadata `json:"metadata"`
-    Data     []T                `json:"data"`
-}
+### What Needs Work for Microservices
 
-type PaginationMetadata struct {
-    TotalItems int `json:"totalItems"`
-    TotalPages int `json:"totalPages"`
-    Page       int `json:"page"`
-    Limit      int `json:"limit"`
-}
-
-func NewPaginatedResponse[T any](requestID string, data []T, totalItems int, meta PaginationMetadata) *PaginatedResponse[T] {
-    totalPages := (totalItems + meta.Limit - 1) / meta.Limit
-
-    return &PaginatedResponse[T]{
-        CommonResponse: CommonResponse{
-            RequestID: requestID,
-        },
-        Metadata: PaginationMetadata{
-            TotalItems: totalItems,
-            TotalPages: totalPages,
-            Page:       meta.Page,
-            Limit:      meta.Limit,
-        },
-        Data: data,
-    }
-}
-```
+🔴 **Database Separation**: Currently shared DB, need per-module schemas  
+🔴 **Distributed Tracing**: Add OpenTelemetry for cross-service tracing  
+🔴 **API Gateway**: Need gateway for routing and aggregation  
+🔴 **Service Discovery**: Add Consul/etcd for service registration  
+🔴 **Circuit Breakers**: Add resilience patterns for inter-service calls  
 
 ---
 
@@ -1363,24 +957,73 @@ func NewPaginatedResponse[T any](requestID string, data []T, totalItems int, met
 - [x] User CRUD implementation
 - [x] Authentication system: JWT, Basic Auth, Session-based (untested)
 - [x] Middleware integration (untested)
+- [x] **Shared Kernel** (`internal/shared/`) - Events, Errors, Context, UoW, Validator
+- [x] **Domain-per-Module Pattern** - Each module owns its domain types
+- [x] **Anti-Corruption Layer (ACL)** - Clean cross-module communication
+- [x] **Dependency Linter** (`cmd/lint-deps/`) - Enforces module isolation
+- [x] **Shared Context Interface** (`sharedctx.Context`) - Framework-agnostic handlers
 
 ### Planned 📋
-- [ ] Unit Tests
+- [ ] Unit Tests (Priority: High)
 - [ ] Redis integration (caching)
 - [ ] Worker support: Asynq, RabbitMQ, Redpanda
 - [ ] Storage support: S3-Compatible, GCS, MinIO, Local
 - [ ] gRPC & Protocol Buffers support
 - [ ] WebSocket integration
+- [ ] OpenTelemetry integration for distributed tracing
+- [ ] Database-per-module schema separation
+- [ ] API Gateway setup (Kong/Traefik)
+- [ ] Kubernetes deployment manifests
 
 ---
 
 ## Contributing
 
-1. Follow the module structure outlined above
-2. Use feature flags for new components
-3. Implement both PostgreSQL and MongoDB repositories when applicable
-4. Add migrations for database schema changes
-5. Update this documentation for significant changes
+### Development Guidelines
+
+1. **Follow Module Structure**: Use `domain/` folder for module-specific types
+2. **Use Feature Flags**: Configure new components via `config/featureflags.yaml`
+3. **Implement Multiple Repositories**: Support PostgreSQL and MongoDB when applicable
+4. **Add Migrations**: Place in `internal/infrastructure/db/*/migration/`
+5. **Update Documentation**: Keep this file current with changes
+
+### Dependency Rules
+
+1. **Run Linter Before Commit**:
+   ```bash
+   go run cmd/lint-deps/main.go
+   ```
+
+2. **Cross-Module Communication**:
+   - Use **ACL** for synchronous operations (create ACL adapter in `acl/` folder)
+   - Use **Events** for asynchronous operations (publish to EventBus)
+
+3. **Allowed Imports**:
+   - ✅ `internal/shared/*` - Shared kernel packages
+   - ✅ Same module packages - `internal/modules/<module>/*`
+   - ✅ ACL folders can import other modules - `internal/modules/<module>/acl/`
+   - ❌ Cross-module imports - `internal/modules/<other-module>/*`
+
+### Adding a New Module
+
+1. Create folder structure:
+   ```
+   internal/modules/<new-module>/
+   ├── domain/
+   │   ├── model.go
+   │   ├── interfaces.go
+   │   ├── request.go
+   │   ├── response.go
+   │   └── events.go
+   ├── handler/v1/
+   ├── service/v1/
+   └── repository/sql/
+   ```
+
+2. Add feature flags to `config/featureflags.yaml`
+3. Wire up in `internal/app/core/container.go`
+4. Add routes in `internal/app/http/routes.go`
+5. Run dependency linter to verify isolation
 
 ---
 

@@ -1,47 +1,27 @@
-package auth
+package domain
 
 import (
 	"context"
+
+	sharedctx "go-modular-monolith/internal/shared/context"
 )
 
-// Context defines the interface for HTTP context used by auth handlers
-type Context interface {
-	BindJSON(obj any) error
-	BindURI(obj any) error
-	BindQuery(obj any) error
-	BindHeader(obj any) error
-	Bind(obj any) error
-	JSON(code int, v any) error
-	Param(name string) string
-	GetUserID() string
-	Get(key string) any
-	Set(key string, value any)
-	GetContext() context.Context
-	GetHeader(key string) string
-	SetHeader(key, value string)
-	GetCookie(name string) (string, error)
-	SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool)
-	RemoveCookie(name string)
-	GetClientIP() string
-	GetUserAgent() string
+// Handler defines the interface for authentication HTTP handlers
+type Handler interface {
+	Login(c sharedctx.Context) error
+	Register(c sharedctx.Context) error
+	Logout(c sharedctx.Context) error
+	RefreshToken(c sharedctx.Context) error
+	ValidateToken(c sharedctx.Context) error
+	ChangePassword(c sharedctx.Context) error
+	GetProfile(c sharedctx.Context) error
+	GetSessions(c sharedctx.Context) error
+	RevokeSession(c sharedctx.Context) error
+	RevokeAllSessions(c sharedctx.Context) error
 }
 
-// AuthHandler defines the interface for authentication HTTP handlers
-type AuthHandler interface {
-	Login(c Context) error
-	Register(c Context) error
-	Logout(c Context) error
-	RefreshToken(c Context) error
-	ValidateToken(c Context) error
-	ChangePassword(c Context) error
-	GetProfile(c Context) error
-	GetSessions(c Context) error
-	RevokeSession(c Context) error
-	RevokeAllSessions(c Context) error
-}
-
-// AuthService defines the interface for authentication business logic
-type AuthService interface {
+// Service defines the interface for authentication business logic
+type Service interface {
 	// Authentication
 	Login(ctx context.Context, req *LoginRequest, userAgent, ipAddress string) (*LoginResponse, error)
 	Register(ctx context.Context, req *RegisterRequest) (*RegisterResponse, error)
@@ -69,8 +49,8 @@ type AuthService interface {
 	VerifyPassword(hashedPassword, password string) error
 }
 
-// AuthRepository defines the interface for authentication data access
-type AuthRepository interface {
+// Repository defines the interface for authentication data access
+type Repository interface {
 	StartContext(ctx context.Context) context.Context
 	DeferErrorContext(ctx context.Context, err error)
 
@@ -96,14 +76,41 @@ type AuthRepository interface {
 // Middleware defines the interface for authentication middleware
 type Middleware interface {
 	// Authenticate validates the request and sets auth context
-	Authenticate() func(next func(Context) error) func(Context) error
+	Authenticate() func(next func(sharedctx.Context) error) func(sharedctx.Context) error
 
 	// RequireAuth ensures the request is authenticated
-	RequireAuth() func(next func(Context) error) func(Context) error
+	RequireAuth() func(next func(sharedctx.Context) error) func(sharedctx.Context) error
 
 	// OptionalAuth tries to authenticate but allows unauthenticated requests
-	OptionalAuth() func(next func(Context) error) func(Context) error
+	OptionalAuth() func(next func(sharedctx.Context) error) func(sharedctx.Context) error
 
 	// RequireRoles ensures the authenticated user has specific roles
-	RequireRoles(roles ...string) func(next func(Context) error) func(Context) error
+	RequireRoles(roles ...string) func(next func(sharedctx.Context) error) func(sharedctx.Context) error
+}
+
+// =============================================================================
+// Anti-Corruption Layer (ACL) Interfaces
+// These interfaces define contracts for external module dependencies.
+// Auth module owns these interfaces, external modules provide implementations.
+// =============================================================================
+
+// UserCreator is an ACL interface for creating users during registration.
+// This abstracts the dependency on the user module, allowing:
+// - Clear contract definition owned by auth module
+// - Easy testing with mocks
+// - Swappable implementations for different scenarios
+// - Future migration to event-driven or microservices architecture
+type UserCreator interface {
+	// CreateUser creates a new user account.
+	// The auth module defines what it needs; the adapter translates to user module.
+	CreateUser(ctx context.Context, user *NewUser) error
+}
+
+// NewUser represents the data auth module needs to create a user.
+// This is auth's view of a user, not the user module's domain model.
+type NewUser struct {
+	ID        string
+	Name      string
+	Email     string
+	CreatedBy string
 }

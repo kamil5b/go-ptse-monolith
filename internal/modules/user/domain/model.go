@@ -1,7 +1,8 @@
-package user
+package domain
 
 import "time"
 
+// User represents the user entity
 type User struct {
 	ID        string     `db:"id" json:"id" bson:"id"`
 	Name      string     `db:"name" json:"name" bson:"name"`
