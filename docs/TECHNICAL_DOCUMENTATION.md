@@ -35,6 +35,7 @@
 Go Modular Monolith is a production-ready, modular monolithic application built with Go. It implements clean architecture principles with pluggable components, allowing teams to:
 
 - **Switch HTTP frameworks** (Echo/Gin) via configuration
+- **Switch HTTP frameworks** (Echo, Gin, net/http, fasthttp, Fiber) via configuration
 - **Swap database backends** (PostgreSQL/MongoDB) per module
 - **Version handlers, services, and repositories** independently
 - **Enable/disable features** through feature flags
@@ -47,7 +48,7 @@ Go Modular Monolith is a production-ready, modular monolithic application built 
 | Component | Technology |
 |-----------|------------|
 | Language | Go 1.24.7 |
-| HTTP Frameworks | Echo v4, Gin v1 |
+| HTTP Frameworks | Echo v4, Gin v1, net/http (stdlib), fasthttp, Fiber |
 | SQL Database | PostgreSQL (via sqlx) |
 | NoSQL Database | MongoDB |
 | Migrations | Goose (SQL), mongosh (MongoDB) |
@@ -66,7 +67,7 @@ Go Modular Monolith is a production-ready, modular monolithic application built 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Transport Layer                        │
-│                   (Echo/Gin Adapters)                       │
+│  (Echo / Gin / net/http / FastHTTP / Fiber Adapters)        │
 ├─────────────────────────────────────────────────────────────┤
 │                      Handler Layer                          │
 │              (HTTP Request/Response Handling)               │
@@ -130,7 +131,7 @@ Container (DI)
    └── Handler (v1/noop)
    │
    ▼
-HTTP Server (Echo/Gin)
+HTTP Server (Echo/Gin/net/http/FastHTTP/Fiber)
    │
    ▼
 Routes → Handlers → Services → Repositories → Database
@@ -263,9 +264,18 @@ go-modular-monolith/
 │   │       ├── echo/
 │   │       │   ├── adapter.echo.go
 │   │       │   └── context.echo.go
-│   │       └── gin/
-│   │           ├── adapter.gin.go
-│   │           └── context.gin.go
+│   │       ├── gin/
+│   │       │   ├── adapter.gin.go
+│   │       │   └── context.gin.go
+│   │       ├── nethttp/                       # native net/http adapters
+│   │       │   ├── adapter.nethttp.go
+│   │       │   └── context.nethttp.go
+│   │       ├── fasthttp/                      # fasthttp adapters (github.com/valyala/fasthttp)
+│   │       │   ├── adapter.fasthttp.go
+│   │       │   └── context.fasthttp.go
+│   │       └── fiber/                         # Fiber adapters (github.com/gofiber/fiber)
+│   │           ├── adapter.fiber.go
+│   │           └── context.fiber.go
 │   └── proto/                       # gRPC protobuf definitions (planned)
 └── pkg/
     ├── constant/                    # Shared constants
@@ -391,7 +401,7 @@ Feature flags allow dynamic component selection without code changes.
 ### config/featureflags.yaml
 
 ```yaml
-http_handler: echo  # echo | gin
+http_handler: echo  # echo | gin | nethttp | fasthttp | fiber
 
 handler:
   authentication: v1   # v1 | disable
@@ -413,7 +423,7 @@ repository:
 
 | Component | Options | Description |
 |-----------|---------|-------------|
-| `http_handler` | `echo`, `gin` | HTTP framework selection |
+| `http_handler` | `echo`, `gin`, `nethttp`, `fasthttp`, `fiber` | HTTP framework selection |
 | `handler.*` | `v1`, `disable` | Handler version or disabled |
 | `service.*` | `v1`, `disable` | Service version or disabled |
 | `repository.*` | `postgres`, `mongo`, `disable` | Database backend |

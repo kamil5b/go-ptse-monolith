@@ -3,10 +3,14 @@ package bootstrap
 import (
 	"errors"
 	"fmt"
+	"net/http"
+
 	"go-modular-monolith/internal/app/core"
 	appHttp "go-modular-monolith/internal/app/http"
 	infraMongo "go-modular-monolith/internal/infrastructure/db/mongo"
 	infraSQL "go-modular-monolith/internal/infrastructure/db/sql"
+
+	"github.com/valyala/fasthttp"
 )
 
 func RunServer() error {
@@ -54,6 +58,21 @@ func RunServer() error {
 	case "gin":
 		server := appHttp.NewGinServer(container)
 		if err := server.Run(":" + cfg.App.Server.Port); err != nil {
+			return err
+		}
+	case "nethttp":
+		handler := appHttp.NewNetHTTPServer(container)
+		if err := http.ListenAndServe(":"+cfg.App.Server.Port, handler); err != nil {
+			return err
+		}
+	case "fasthttp":
+		handler := appHttp.NewFastHTTPServer(container)
+		if err := fasthttp.ListenAndServe(":"+cfg.App.Server.Port, handler); err != nil {
+			return err
+		}
+	case "fiber":
+		server := appHttp.NewFiberServer(container)
+		if err := server.Listen(":" + cfg.App.Server.Port); err != nil {
 			return err
 		}
 	default: //default to echo
