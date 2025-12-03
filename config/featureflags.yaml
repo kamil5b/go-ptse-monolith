@@ -1,5 +1,7 @@
 http_handler: echo
 
+cache: redis  # redis, memory, disable
+
 handler:
   authentication: v1
   product: v1

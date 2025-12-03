@@ -25,6 +25,16 @@ type MongoConfig struct {
 	MongoDB  string `yaml:"mongo_db"`
 }
 
+type RedisConfig struct {
+	Host         string `yaml:"host"`
+	Port         string `yaml:"port"`
+	Password     string `yaml:"password"`
+	DB           int    `yaml:"db"`
+	MaxRetries   int    `yaml:"max_retries"`
+	PoolSize     int    `yaml:"pool_size"`
+	MinIdleConns int    `yaml:"min_idle_conns"`
+}
+
 type JWTConfig struct {
 	Secret               string `yaml:"secret"`
 	AccessTokenDuration  string `yaml:"access_token_duration"`
@@ -40,6 +50,7 @@ type AuthConfig struct {
 type AppConfig struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
+	Redis    RedisConfig    `yaml:"redis"`
 	JWT      JWTConfig      `yaml:"jwt"`
 	Auth     AuthConfig     `yaml:"auth"`
 }

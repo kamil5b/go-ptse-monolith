@@ -180,6 +180,10 @@ go-modular-monolith/
 │   │       ├── helpers.go           # Middleware helpers
 │   │       └── routes.go            # Route definitions
 │   ├── shared/                      # ⭐ NEW: Shared Kernel
+│   │   ├── cache/
+│   │   │   ├── cache.go             # Cache interface definition
+│   │   │   ├── errors.go            # Cache error types
+│   │   │   └── memory.go            # In-memory cache implementation
 │   │   ├── context/
 │   │   │   └── context.go           # Shared HTTP context interface
 │   │   ├── errors/
@@ -195,6 +199,8 @@ go-modular-monolith/
 │   │   └── validator/
 │   │       └── validator.go         # Request validation utilities
 │   ├── infrastructure/
+│   │   ├── cache/
+│   │   │   └── redis.go             # Redis cache implementation
 │   │   ├── db/
 │   │   │   ├── sql/
 │   │   │   │   ├── sql.go           # PostgreSQL connection
@@ -204,7 +210,8 @@ go-modular-monolith/
 │   │   │   │   └── migration/       # MongoDB migration scripts
 │   │   │   └── uow/
 │   │   │       └── unit_of_work.go  # UoW implementation
-│   │   ├── cache/                   # Redis (planned)
+│   │   ├── cache/
+│   │   │   └── redis.go             # Redis cache implementation
 │   │   ├── logger/                  # Logger infrastructure
 │   │   └── storage/                 # File storage (planned)
 │   ├── modules/
@@ -363,8 +370,24 @@ app:
       mongo_url: "mongodb://localhost:27017"
       mongo_db: "myapp_db"
 
+  redis:
+    host: "localhost"
+    port: "6379"
+    password: ""
+    db: 0
+    max_retries: 3
+    pool_size: 10
+    min_idle_conns: 5
+
   jwt:
     secret: "supersecretkey"  # JWT signing secret
+    access_token_duration: "15m"
+    refresh_token_duration: "168h"
+
+  auth:
+    type: "jwt"  # jwt, session, basic, none
+    session_cookie: "session_token"
+    bcrypt_cost: 10
 ```
 
 ### Configuration Struct
@@ -378,7 +401,9 @@ type Config struct {
 type AppConfig struct {
     Server   ServerConfig   `yaml:"server"`
     Database DatabaseConfig `yaml:"database"`
+    Redis    RedisConfig    `yaml:"redis"`
     JWT      JWTConfig      `yaml:"jwt"`
+    Auth     AuthConfig     `yaml:"auth"`
 }
 
 type ServerConfig struct {
@@ -389,6 +414,16 @@ type ServerConfig struct {
 type DatabaseConfig struct {
     SQL   SQLConfig   `yaml:"sql"`
     Mongo MongoConfig `yaml:"mongo"`
+}
+
+type RedisConfig struct {
+    Host         string `yaml:"host"`
+    Port         string `yaml:"port"`
+    Password     string `yaml:"password"`
+    DB           int    `yaml:"db"`
+    MaxRetries   int    `yaml:"max_retries"`
+    PoolSize     int    `yaml:"pool_size"`
+    MinIdleConns int    `yaml:"min_idle_conns"`
 }
 ```
 
@@ -402,6 +437,8 @@ Feature flags allow dynamic component selection without code changes.
 
 ```yaml
 http_handler: echo  # echo | gin | nethttp | fasthttp | fiber
+
+cache: redis  # redis | memory | disable
 
 handler:
   authentication: v1   # v1 | disable
@@ -424,6 +461,7 @@ repository:
 | Component | Options | Description |
 |-----------|---------|-------------|
 | `http_handler` | `echo`, `gin`, `nethttp`, `fasthttp`, `fiber` | HTTP framework selection |
+| `cache` | `redis`, `memory`, `disable` | Cache backend (redis or in-memory) |
 | `handler.*` | `v1`, `disable` | Handler version or disabled |
 | `service.*` | `v1`, `disable` | Service version or disabled |
 | `repository.*` | `postgres`, `mongo`, `disable` | Database backend |
@@ -666,6 +704,93 @@ type UserCreated struct {
 
 func (e UserCreated) EventName() string    { return "user.created" }
 func (e UserCreated) OccurredAt() time.Time { return e.Timestamp }
+```
+
+### Caching Layer
+
+The caching layer (`internal/shared/cache/`) provides a unified interface for cache operations across all modules, supporting both Redis and in-memory implementations.
+
+**Cache Interface:**
+```go
+// internal/shared/cache/cache.go
+package cache
+
+type Cache interface {
+	// Get retrieves a string value from cache
+	Get(ctx context.Context, key string) (string, error)
+
+	// GetBytes retrieves bytes value from cache
+	GetBytes(ctx context.Context, key string) ([]byte, error)
+
+	// Set stores a value in cache with optional expiration
+	Set(ctx context.Context, key string, value any, expiration time.Duration) error
+
+	// SetNX stores a value only if key does not exist
+	SetNX(ctx context.Context, key string, value any, expiration time.Duration) (bool, error)
+
+	// Delete removes one or more keys from cache
+	Delete(ctx context.Context, keys ...string) error
+
+	// Exists checks if one or more keys exist in cache (returns count of existing keys)
+	Exists(ctx context.Context, keys ...string) (int64, error)
+
+	// Expire sets a timeout on a key
+	Expire(ctx context.Context, key string, expiration time.Duration) error
+
+	// TTL returns the remaining time to live of a key
+	TTL(ctx context.Context, key string) (time.Duration, error)
+
+	// Increment increments the number stored at key
+	Increment(ctx context.Context, key string, increment int64) (int64, error)
+
+	// Decrement decrements the number stored at key
+	Decrement(ctx context.Context, key string, decrement int64) (int64, error)
+
+	// Health checks the health of the cache
+	Health(ctx context.Context) error
+}
+```
+
+**Implementations:**
+
+1. **Redis Cache** (`internal/infrastructure/cache/redis.go`):
+   - Production-grade caching with connection pooling
+   - Configurable timeouts and pool sizes
+   - Automatic health checks
+   - Fallback to in-memory cache on connection failure
+
+2. **In-Memory Cache** (`internal/shared/cache/memory.go`):
+   - Ideal for testing and development
+   - Automatic expiration cleanup
+   - Goroutine-safe with RWMutex
+
+**Usage in Modules:**
+```go
+// Services can inject Cache to cache computed results
+type ProductService struct {
+    repository productDomain.Repository
+    cache      cache.Cache
+}
+
+func (s *ProductService) GetProduct(ctx context.Context, id string) (*productDomain.Product, error) {
+    // Try cache first
+    cacheKey := fmt.Sprintf("product:%s", id)
+    cached, err := s.cache.Get(ctx, cacheKey)
+    if err == nil {
+        // Parse and return cached product
+        return parseProduct(cached)
+    }
+
+    // Cache miss or error, fetch from repository
+    product, err := s.repository.GetByID(ctx, id)
+    if err != nil {
+        return nil, err
+    }
+
+    // Cache the result (1 hour expiration)
+    s.cache.Set(ctx, cacheKey, product.String(), time.Hour)
+    return product, nil
+}
 ```
 
 ---
@@ -972,10 +1097,10 @@ When ready to migrate to microservices:
 - [x] **Anti-Corruption Layer (ACL)** - Clean cross-module communication
 - [x] **Dependency Linter** (`cmd/lint-deps/`) - Enforces module isolation
 - [x] **Shared Context Interface** (`sharedctx.Context`) - Framework-agnostic handlers
+- [x] **Redis Integration** - Caching with Redis & in-memory fallback
 
 ### Planned 📋
 - [ ] Unit Tests (Priority: High)
-- [ ] Redis integration (caching)
 - [ ] Worker support: Asynq, RabbitMQ, Redpanda
 - [ ] Storage support: S3-Compatible, GCS, MinIO, Local
 - [ ] gRPC & Protocol Buffers support
@@ -996,6 +1121,69 @@ When ready to migrate to microservices:
 3. **Implement Multiple Repositories**: Support PostgreSQL and MongoDB when applicable
 4. **Add Migrations**: Place in `internal/infrastructure/db/*/migration/`
 5. **Update Documentation**: Keep this file current with changes
+
+### Service Layer Best Practices
+
+When implementing service methods that use Unit of Work transactions, follow the **Panic Recovery Pattern** with defer to ensure proper context cleanup:
+
+```go
+func (s *ServiceV1) Create(ctx context.Context, req *domain.CreateRequest, createdBy string) (result *domain.Entity, err error) {
+	// Start transaction context
+	ctx = s.uow.StartContext(ctx)
+	
+	// Defer cleanup with error and panic recovery
+	defer s.uow.DeferErrorContext(ctx, err)
+	defer func() {
+		if r := recover(); r != nil {
+			switch x := r.(type) {
+			case string:
+				err = fmt.Errorf("panic: %s", x)
+			case error:
+				err = fmt.Errorf("panic: %w", x)
+			default:
+				err = fmt.Errorf("panic: %v", x)
+			}
+		}
+	}()
+
+	// Your business logic here
+	entity := &domain.Entity{
+		Name: req.Name,
+		CreatedAt: time.Now().UTC(),
+		CreatedBy: createdBy,
+	}
+	
+	if err = s.repo.Create(ctx, entity); err != nil {
+		return nil, err
+	}
+
+	// Publish domain events
+	if s.eventBus != nil {
+		_ = s.eventBus.Publish(ctx, domain.EntityCreatedEvent{
+			EntityID:  entity.ID,
+			CreatedBy: createdBy,
+		})
+	}
+
+	result = entity
+	return
+}
+```
+
+**Key Points:**
+- Use **named return values** (`result *domain.Entity, err error`) for clean deferred cleanup
+- First defer handles UnitOfWork cleanup and error propagation
+- Second defer handles panic recovery, converting panics to errors
+- Always check errors and return early
+- Publish domain events after successful operations
+- Return early from defers so cleanup always happens at function exit
+
+**Benefits:**
+- ✅ Guaranteed context cleanup (commit on success, rollback on error)
+- ✅ Panic safety - panics are caught and converted to errors
+- ✅ Transaction atomicity - all-or-nothing semantics
+- ✅ Cleaner code - error handling and cleanup in one place
+- ✅ Consistent pattern across all services
 
 ### Dependency Rules
 

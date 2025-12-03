@@ -15,6 +15,7 @@
 - [x] Anti-Corruption Layer (ACL) - Clean cross-module communication
 - [x] Dependency Linter (`cmd/lint-deps/`) - Enforces module isolation
 - [x] Shared Context Interface (`sharedctx.Context`) - Framework-agnostic handlers
+- [x] Redis integration (caching)
 
 ## In Progress 🚧
 
@@ -22,7 +23,6 @@
 
 ## Planned 📋
 
-- [ ] Redis integration (caching)
 - [ ] Worker support: Asynq, RabbitMQ, Redpanda
 - [ ] Storage support: S3-Compatible, GCS, MinIO, Local, etc
 - [ ] gRPC & Protocol Buffers support

@@ -2,6 +2,7 @@ package core
 
 import (
 	// Shared packages
+	"go-modular-monolith/internal/shared/cache"
 	"go-modular-monolith/internal/shared/events"
 	"go-modular-monolith/internal/shared/uow"
 
@@ -35,11 +36,17 @@ import (
 	// Unit of Work
 	"go-modular-monolith/internal/modules/unitofwork"
 
+	// Infrastructure
+	infracache "go-modular-monolith/internal/infrastructure/cache"
+
 	"github.com/jmoiron/sqlx"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type Container struct {
+	// Cache (shared)
+	Cache cache.Cache
+
 	// Event Bus (shared)
 	EventBus events.EventBus
 
@@ -67,6 +74,7 @@ func NewContainer(
 	mongoClient *mongo.Client,
 ) *Container {
 	var (
+		cacheInstance     cache.Cache
 		productRepository productDomain.Repository
 		productService    productDomain.Service
 		productHandler    productDomain.Handler
@@ -79,6 +87,34 @@ func NewContainer(
 		authMiddleware    *middleware.AuthMiddleware
 		unitOfWork        uow.UnitOfWork
 	)
+
+	// Initialize cache (shared across all modules)
+	switch featureFlag.Cache {
+	case "redis":
+		if config != nil {
+			redisConfig := infracache.RedisConfig{
+				Host:         config.App.Redis.Host,
+				Port:         config.App.Redis.Port,
+				Password:     config.App.Redis.Password,
+				DB:           config.App.Redis.DB,
+				MaxRetries:   config.App.Redis.MaxRetries,
+				PoolSize:     config.App.Redis.PoolSize,
+				MinIdleConns: config.App.Redis.MinIdleConns,
+			}
+			if redisClient, err := infracache.NewRedisClient(redisConfig); err == nil {
+				cacheInstance = infracache.NewRedisCache(redisClient)
+			} else {
+				// Fallback to in-memory cache if Redis connection fails
+				cacheInstance = cache.NewInMemoryCache()
+			}
+		} else {
+			cacheInstance = cache.NewInMemoryCache()
+		}
+	case "memory", "disable":
+		fallthrough
+	default:
+		cacheInstance = cache.NewInMemoryCache()
+	}
 
 	// Initialize event bus (shared across all modules)
 	eventBus := events.NewInMemoryEventBus()
@@ -176,6 +212,7 @@ func NewContainer(
 	authMiddleware = middleware.NewAuthMiddleware(authService, middlewareConfig)
 
 	return &Container{
+		Cache:             cacheInstance,
 		EventBus:          eventBus,
 		ProductRepository: productRepository,
 		ProductService:    productService,

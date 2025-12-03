@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"go-modular-monolith/internal/modules/auth/domain"
 	"time"
 
@@ -119,7 +120,7 @@ func (s *ServiceV1) Login(ctx context.Context, req *domain.LoginRequest, userAge
 	}, nil
 }
 
-func (s *ServiceV1) Register(ctx context.Context, req *domain.RegisterRequest) (*domain.RegisterResponse, error) {
+func (s *ServiceV1) Register(ctx context.Context, req *domain.RegisterRequest) (resp *domain.RegisterResponse, err error) {
 	if _, err := s.repo.GetCredentialByUsername(ctx, req.Username); err == nil {
 		return nil, ErrUsernameExists
 	}
@@ -144,8 +145,21 @@ func (s *ServiceV1) Register(ctx context.Context, req *domain.RegisterRequest) (
 	}
 
 	ctx = s.repo.StartContext(ctx)
-	if err := s.userCreator.CreateUser(ctx, newUser); err != nil {
-		s.repo.DeferErrorContext(ctx, err)
+	defer s.repo.DeferErrorContext(ctx, err)
+	defer func() {
+		if r := recover(); r != nil {
+			switch x := r.(type) {
+			case string:
+				err = fmt.Errorf("panic: %s", x)
+			case error:
+				err = fmt.Errorf("panic: %w", x)
+			default:
+				err = fmt.Errorf("panic: %v", x)
+			}
+		}
+	}()
+
+	if err = s.userCreator.CreateUser(ctx, newUser); err != nil {
 		return nil, err
 	}
 
@@ -158,14 +172,11 @@ func (s *ServiceV1) Register(ctx context.Context, req *domain.RegisterRequest) (
 		IsActive:     true,
 	}
 
-	if err := s.repo.CreateCredential(ctx, cred); err != nil {
-		s.repo.DeferErrorContext(ctx, err)
+	if err = s.repo.CreateCredential(ctx, cred); err != nil {
 		return nil, err
 	}
 
-	s.repo.DeferErrorContext(ctx, nil)
-
-	return &domain.RegisterResponse{
+	resp = &domain.RegisterResponse{
 		User: &domain.UserInfo{
 			ID:       userID,
 			Username: req.Username,
@@ -173,7 +184,8 @@ func (s *ServiceV1) Register(ctx context.Context, req *domain.RegisterRequest) (
 			Name:     req.Name,
 		},
 		Message: "Registration successful",
-	}, nil
+	}
+	return
 }
 
 func (s *ServiceV1) Logout(ctx context.Context, userID string, req *domain.LogoutRequest) error {

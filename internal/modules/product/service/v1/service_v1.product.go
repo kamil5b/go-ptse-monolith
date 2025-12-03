@@ -2,6 +2,7 @@ package v1
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go-modular-monolith/internal/modules/product/domain"
@@ -19,16 +20,29 @@ func NewServiceV1(r domain.Repository, u uow.UnitOfWork, eb events.EventBus) *Se
 	return &ServiceV1{repo: r, uow: u, eventBus: eb}
 }
 
-func (s *ServiceV1) Create(ctx context.Context, req *domain.CreateProductRequest, createdBy string) (*domain.Product, error) {
+func (s *ServiceV1) Create(ctx context.Context, req *domain.CreateProductRequest, createdBy string) (product *domain.Product, err error) {
 	ctx = s.uow.StartContext(ctx)
+	defer s.uow.DeferErrorContext(ctx, err)
+	defer func() {
+		if r := recover(); r != nil {
+			switch x := r.(type) {
+			case string:
+				err = fmt.Errorf("panic: %s", x)
+			case error:
+				err = fmt.Errorf("panic: %w", x)
+			default:
+				err = fmt.Errorf("panic: %v", x)
+			}
+		}
+	}()
+
 	var p domain.Product
 	p.Name = req.Name
 	p.Description = req.Description
 	p.CreatedAt = time.Now().UTC()
 	p.CreatedBy = createdBy
-	err := s.repo.Create(ctx, &p)
-	if err != nil {
-		s.uow.DeferErrorContext(ctx, err)
+
+	if err = s.repo.Create(ctx, &p); err != nil {
 		return nil, err
 	}
 
@@ -43,8 +57,8 @@ func (s *ServiceV1) Create(ctx context.Context, req *domain.CreateProductRequest
 		})
 	}
 
-	s.uow.DeferErrorContext(ctx, nil) // Commit transaction
-	return &p, nil
+	product = &p
+	return
 }
 func (s *ServiceV1) Get(ctx context.Context, id string) (*domain.Product, error) {
 	return s.repo.GetByID(ctx, id)
@@ -52,8 +66,22 @@ func (s *ServiceV1) Get(ctx context.Context, id string) (*domain.Product, error)
 func (s *ServiceV1) List(ctx context.Context) ([]domain.Product, error) {
 	return s.repo.List(ctx)
 }
-func (s *ServiceV1) Update(ctx context.Context, req *domain.UpdateProductRequest, updatedBy string) (*domain.Product, error) {
+func (s *ServiceV1) Update(ctx context.Context, req *domain.UpdateProductRequest, updatedBy string) (product *domain.Product, err error) {
 	ctx = s.uow.StartContext(ctx)
+	defer s.uow.DeferErrorContext(ctx, err)
+	defer func() {
+		if r := recover(); r != nil {
+			switch x := r.(type) {
+			case string:
+				err = fmt.Errorf("panic: %s", x)
+			case error:
+				err = fmt.Errorf("panic: %w", x)
+			default:
+				err = fmt.Errorf("panic: %v", x)
+			}
+		}
+	}()
+
 	p, err := s.repo.GetByID(ctx, req.ID)
 	if err != nil {
 		return nil, err
@@ -69,7 +97,6 @@ func (s *ServiceV1) Update(ctx context.Context, req *domain.UpdateProductRequest
 	p.UpdatedBy = &updatedBy
 	err = s.repo.Update(ctx, p)
 	if err != nil {
-		s.uow.DeferErrorContext(ctx, err)
 		return nil, err
 	}
 
@@ -84,14 +111,27 @@ func (s *ServiceV1) Update(ctx context.Context, req *domain.UpdateProductRequest
 		})
 	}
 
-	s.uow.DeferErrorContext(ctx, nil) // Commit transaction
-	return p, nil
+	product = p
+	return
 }
-func (s *ServiceV1) Delete(ctx context.Context, id, by string) error {
+func (s *ServiceV1) Delete(ctx context.Context, id, by string) (err error) {
 	ctx = s.uow.StartContext(ctx)
-	err := s.repo.SoftDelete(ctx, id, by)
+	defer s.uow.DeferErrorContext(ctx, err)
+	defer func() {
+		if r := recover(); r != nil {
+			switch x := r.(type) {
+			case string:
+				err = fmt.Errorf("panic: %s", x)
+			case error:
+				err = fmt.Errorf("panic: %w", x)
+			default:
+				err = fmt.Errorf("panic: %v", x)
+			}
+		}
+	}()
+
+	err = s.repo.SoftDelete(ctx, id, by)
 	if err != nil {
-		s.uow.DeferErrorContext(ctx, err)
 		return err
 	}
 
@@ -104,6 +144,5 @@ func (s *ServiceV1) Delete(ctx context.Context, id, by string) error {
 		})
 	}
 
-	s.uow.DeferErrorContext(ctx, nil) // Commit transaction
 	return nil
 }

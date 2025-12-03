@@ -26,6 +26,7 @@ type RepositoryFeatureFlag struct {
 
 type FeatureFlag struct {
 	HTTPHandler string `yaml:"http_handler"` // echo, gin
+	Cache       string `yaml:"cache"`        // redis, memory, disable
 
 	Handler    HandlerFeatureFlag    `yaml:"handler"`
 	Service    ServiceFeatureFlag    `yaml:"service"`
