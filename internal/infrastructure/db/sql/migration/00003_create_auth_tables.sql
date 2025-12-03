@@ -1,3 +1,4 @@
+-- +goose Up
 -- Auth credentials table
 CREATE TABLE IF NOT EXISTS auth_credentials (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -32,3 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_auth_credentials_user_id ON auth_credentials(user
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token) WHERE revoked_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id) WHERE revoked_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions(expires_at);
+
+-- +goose Down
+DROP TABLE auth_sessions IF EXISTS;
+DROP TABLE auth_credentials IF EXISTS;
