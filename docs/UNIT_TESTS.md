@@ -605,6 +605,304 @@ tests := []struct{
 }
 ```
 
+## HTTP Handler Testing
+
+### Overview
+
+HTTP handlers are typically tested using table-driven tests with mocked dependencies (service layer). The handler's responsibility is to:
+
+1. Extract/bind request data
+2. Call the service layer
+3. Return appropriate HTTP responses
+
+### Handler Test Pattern
+
+The standard pattern for testing HTTP handlers follows this structure:
+
+```go
+func TestHandler_MethodName(t *testing.T) {
+    cases := []struct {
+        name  string
+        setup func(svc *mockdomain.MockService, mc *ctxmocks.MockContext)
+    }{
+        {
+            name: "scenario name",
+            setup: func(svc *mockdomain.MockService, mc *ctxmocks.MockContext) {
+                // Set expectations on mocks
+            },
+        },
+    }
+
+    for _, tc := range cases {
+        t.Run(tc.name, func(t *testing.T) {
+            ctrl := gomock.NewController(t)
+            defer ctrl.Finish()
+
+            svc := mockdomain.NewMockService(ctrl)
+            mc := ctxmocks.NewMockContext(ctrl)
+            h := NewHandler(svc)
+
+            tc.setup(svc, mc)
+
+            if err := h.MethodName(mc); err != nil {
+                t.Fatalf("MethodName returned error: %v", err)
+            }
+        })
+    }
+}
+```
+
+### Handler Test Components
+
+#### 1. Mock Context Object
+
+The mock context represents the HTTP context (Echo, Gin, Fiber, etc.). Common methods:
+
+```go
+// Data binding
+mc.EXPECT().Bind(gomock.AssignableToTypeOf(&domain.RequestType{})).Return(nil)
+
+// Getting context
+mc.EXPECT().GetContext().Return(context.Background())
+
+// Getting request parameters/body
+mc.EXPECT().Param("id").Return("value")
+mc.EXPECT().Get("key").Return(value)
+
+// Getting authenticated user
+mc.EXPECT().GetUserID().Return("user123")
+
+// Sending responses
+mc.EXPECT().JSON(http.StatusOK, gomock.Any()).Return(nil)
+```
+
+#### 2. Setup Function
+
+The `setup` function in each test case configures mock expectations. This keeps test cases clean and organized:
+
+```go
+setup: func(svc *mockdomain.MockService, mc *ctxmocks.MockContext) {
+    // Set expectations in order they'll be called
+    mc.EXPECT().Bind(gomock.AssignableToTypeOf(&domain.Request{})).Return(nil)
+    mc.EXPECT().GetContext().Return(context.Background())
+    mc.EXPECT().GetUserID().Return("user1")
+    svc.EXPECT().Create(gomock.Any(), gomock.Any(), "user1").Return(&domain.Product{ID: "p1"}, nil)
+    mc.EXPECT().JSON(http.StatusCreated, gomock.Any()).Return(nil)
+},
+```
+
+### Common HTTP Handler Scenarios
+
+#### Scenario 1: Successful Request with Data Binding
+
+**Use Case:** POST/PUT requests that require request body validation
+
+```go
+{
+    name: "ok",
+    setup: func(svc *mockdomain.MockService, mc *ctxmocks.MockContext) {
+        mc.EXPECT().Bind(gomock.AssignableToTypeOf(&domain.CreateProductRequest{})).Return(nil)
+        mc.EXPECT().GetContext().Return(context.Background())
+        mc.EXPECT().GetUserID().Return("user1")
+        svc.EXPECT().Create(gomock.Any(), gomock.AssignableToTypeOf(&domain.CreateProductRequest{}), "user1").
+            Return(&domain.Product{ID: "p1"}, nil)
+        mc.EXPECT().JSON(http.StatusCreated, gomock.Any()).Return(nil)
+    },
+},
+```
+
+**What's tested:**
+- Request binding succeeds
+- Service is called with correct arguments
+- Response status and data are sent
+
+#### Scenario 2: Request Binding Error
+
+**Use Case:** Malformed request body or invalid input
+
+```go
+{
+    name: "bind error",
+    setup: func(svc *mockdomain.MockService, mc *ctxmocks.MockContext) {
+        mc.EXPECT().GetContext().Return(context.Background())
+        mc.EXPECT().Bind(gomock.AssignableToTypeOf(&domain.CreateProductRequest{})).Return(errors.New("bad input"))
+        mc.EXPECT().JSON(http.StatusBadRequest, gomock.Any()).Return(nil)
+    },
+},
+```
+
+**What's tested:**
+- Handler catches binding errors
+- Returns 400 Bad Request status
+- Service is NOT called
+
+#### Scenario 3: Service Returns Error
+
+**Use Case:** Business logic error (validation failure, database error, etc.)
+
+```go
+{
+    name: "service error",
+    setup: func(svc *mockdomain.MockService, mc *ctxmocks.MockContext) {
+        mc.EXPECT().Bind(gomock.AssignableToTypeOf(&domain.CreateProductRequest{})).Return(nil)
+        mc.EXPECT().GetContext().Return(context.Background())
+        mc.EXPECT().GetUserID().Return("user1")
+        svc.EXPECT().Create(gomock.Any(), gomock.AssignableToTypeOf(&domain.CreateProductRequest{}), "user1").
+            Return(nil, errors.New("boom"))
+        mc.EXPECT().JSON(http.StatusInternalServerError, gomock.Any()).Return(nil)
+    },
+},
+```
+
+**What's tested:**
+- Service error is caught and handled
+- Returns 500 Internal Server Error status
+- Error doesn't crash the handler
+
+#### Scenario 4: GET Request with Path Parameter
+
+**Use Case:** Retrieving a resource by ID
+
+```go
+{
+    name: "ok",
+    setup: func(svc *mockdomain.MockService, mc *ctxmocks.MockContext) {
+        mc.EXPECT().GetContext().Return(context.Background())
+        mc.EXPECT().Param("id").Return("p1")
+        svc.EXPECT().Get(gomock.Any(), "p1").Return(&domain.Product{ID: "p1"}, nil)
+        mc.EXPECT().JSON(http.StatusOK, gomock.Any()).Return(nil)
+    },
+},
+```
+
+**What's tested:**
+- Path parameters are extracted correctly
+- Service is called with correct ID
+- Response is returned with success status
+
+#### Scenario 5: Resource Not Found
+
+**Use Case:** GET/DELETE on non-existent resource
+
+```go
+{
+    name: "not found",
+    setup: func(svc *mockdomain.MockService, mc *ctxmocks.MockContext) {
+        mc.EXPECT().GetContext().Return(context.Background())
+        mc.EXPECT().Param("id").Return("p1")
+        svc.EXPECT().Get(gomock.Any(), "p1").Return(nil, errors.New("not found"))
+        mc.EXPECT().JSON(http.StatusNotFound, gomock.Any()).Return(nil)
+    },
+},
+```
+
+**What's tested:**
+- 404 Not Found is returned for missing resources
+- Error message is appropriate
+
+#### Scenario 6: Optional Context Values
+
+**Use Case:** User ID may or may not be present in context
+
+```go
+{
+    name: "ok_with_user",
+    setup: func(svc *mockdomain.MockService, mc *ctxmocks.MockContext) {
+        mc.EXPECT().GetContext().Return(context.Background())
+        mc.EXPECT().Param("id").Return("p1")
+        mc.EXPECT().Get("user_id").Return("user1")  // Returns user ID
+        svc.EXPECT().Delete(gomock.Any(), "p1", "user1").Return(nil)
+        mc.EXPECT().JSON(http.StatusOK, gomock.Any()).Return(nil)
+    },
+},
+{
+    name: "ok_without_user",
+    setup: func(svc *mockdomain.MockService, mc *ctxmocks.MockContext) {
+        mc.EXPECT().GetContext().Return(context.Background())
+        mc.EXPECT().Param("id").Return("p1")
+        mc.EXPECT().Get("user_id").Return(nil)  // No user ID
+        svc.EXPECT().Delete(gomock.Any(), "p1", "").Return(nil)
+        mc.EXPECT().JSON(http.StatusOK, gomock.Any()).Return(nil)
+    },
+},
+```
+
+**What's tested:**
+- Handler works with and without optional context values
+- Service receives empty string when value is not present
+
+### Best Practices for Handler Tests
+
+1. **Set expectations in order** - Mock expectations should match the order they'll be called
+2. **Use `Bind` early** - If binding fails, service shouldn't be called
+3. **Use `AssignableToTypeOf`** - For matching request struct types without knowing exact values
+4. **Test error paths** - Always test binding errors and service errors
+5. **Keep setup functions focused** - Each case should test one specific scenario
+6. **Don't test framework behavior** - Focus on your handler logic, not Echo/Gin internals
+
+### Real-World Example: Product Handler
+
+```go
+func TestHandler_Create(t *testing.T) {
+    cases := []struct {
+        name  string
+        setup func(svc *mockdomain.MockService, mc *ctxmocks.MockContext)
+    }{
+        // Success case: all validations pass
+        {
+            name: "ok",
+            setup: func(svc *mockdomain.MockService, mc *ctxmocks.MockContext) {
+                mc.EXPECT().Bind(gomock.AssignableToTypeOf(&domain.CreateProductRequest{})).Return(nil)
+                mc.EXPECT().GetContext().Return(context.Background())
+                mc.EXPECT().GetUserID().Return("user1")
+                svc.EXPECT().Create(gomock.Any(), gomock.AssignableToTypeOf(&domain.CreateProductRequest{}), "user1").
+                    Return(&domain.Product{ID: "p1"}, nil)
+                mc.EXPECT().JSON(http.StatusCreated, gomock.Any()).Return(nil)
+            },
+        },
+        // Error case: invalid request body
+        {
+            name: "bind error",
+            setup: func(svc *mockdomain.MockService, mc *ctxmocks.MockContext) {
+                mc.EXPECT().GetContext().Return(context.Background())
+                mc.EXPECT().Bind(gomock.AssignableToTypeOf(&domain.CreateProductRequest{})).
+                    Return(errors.New("bad input"))
+                mc.EXPECT().JSON(http.StatusBadRequest, gomock.Any()).Return(nil)
+            },
+        },
+        // Error case: service layer fails
+        {
+            name: "service error",
+            setup: func(svc *mockdomain.MockService, mc *ctxmocks.MockContext) {
+                mc.EXPECT().Bind(gomock.AssignableToTypeOf(&domain.CreateProductRequest{})).Return(nil)
+                mc.EXPECT().GetContext().Return(context.Background())
+                mc.EXPECT().GetUserID().Return("user1")
+                svc.EXPECT().Create(gomock.Any(), gomock.AssignableToTypeOf(&domain.CreateProductRequest{}), "user1").
+                    Return(nil, errors.New("boom"))
+                mc.EXPECT().JSON(http.StatusInternalServerError, gomock.Any()).Return(nil)
+            },
+        },
+    }
+
+    for _, tc := range cases {
+        t.Run(tc.name, func(t *testing.T) {
+            ctrl := gomock.NewController(t)
+            defer ctrl.Finish()
+
+            svc := mockdomain.NewMockService(ctrl)
+            mc := ctxmocks.NewMockContext(ctrl)
+            h := NewHandler(svc)
+
+            tc.setup(svc, mc)
+
+            if err := h.Create(mc); err != nil {
+                t.Fatalf("Create returned error: %v", err)
+            }
+        })
+    }
+}
+```
+
 ## Troubleshooting
 
 ### Tests Fail with "missing call(s)"
