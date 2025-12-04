@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"go-modular-monolith/internal/infrastructure/worker"
 	userdomain "go-modular-monolith/internal/modules/user/domain"
 	"go-modular-monolith/internal/shared/email"
+	sharedworker "go-modular-monolith/internal/shared/worker"
 )
 
 // UserWorkerHandler processes user-related tasks
@@ -26,7 +26,7 @@ func NewUserWorkerHandler(userRepository userdomain.Repository, emailService ema
 }
 
 // HandleSendWelcomeEmail handles the welcome email task
-func (h *UserWorkerHandler) HandleSendWelcomeEmail(ctx context.Context, payload worker.TaskPayload) error {
+func (h *UserWorkerHandler) HandleSendWelcomeEmail(ctx context.Context, payload sharedworker.TaskPayload) error {
 	var p SendWelcomeEmailPayload
 
 	// Unmarshal payload
@@ -68,7 +68,7 @@ func (h *UserWorkerHandler) HandleSendWelcomeEmail(ctx context.Context, payload 
 }
 
 // HandleSendPasswordResetEmail handles the password reset email task
-func (h *UserWorkerHandler) HandleSendPasswordResetEmail(ctx context.Context, payload worker.TaskPayload) error {
+func (h *UserWorkerHandler) HandleSendPasswordResetEmail(ctx context.Context, payload sharedworker.TaskPayload) error {
 	var p SendPasswordResetEmailPayload
 
 	data, _ := json.Marshal(payload)
@@ -107,7 +107,7 @@ func (h *UserWorkerHandler) HandleSendPasswordResetEmail(ctx context.Context, pa
 }
 
 // HandleExportUserData handles the user data export task
-func (h *UserWorkerHandler) HandleExportUserData(ctx context.Context, payload worker.TaskPayload) error {
+func (h *UserWorkerHandler) HandleExportUserData(ctx context.Context, payload sharedworker.TaskPayload) error {
 	var p ExportUserDataPayload
 
 	data, _ := json.Marshal(payload)
@@ -152,7 +152,7 @@ func (h *UserWorkerHandler) HandleExportUserData(ctx context.Context, payload wo
 }
 
 // HandleGenerateUserReport handles the user report generation task
-func (h *UserWorkerHandler) HandleGenerateUserReport(ctx context.Context, payload worker.TaskPayload) error {
+func (h *UserWorkerHandler) HandleGenerateUserReport(ctx context.Context, payload sharedworker.TaskPayload) error {
 	var p GenerateUserReportPayload
 
 	data, _ := json.Marshal(payload)
@@ -194,5 +194,74 @@ func (h *UserWorkerHandler) HandleGenerateUserReport(ctx context.Context, payloa
 
 	fmt.Printf("Successfully generated %s report for user %s\n", p.ReportType, p.UserID)
 
+	return nil
+}
+
+// HandleSendMonthlyEmail handles the monthly email task sent to all users on the 15th
+func (h *UserWorkerHandler) HandleSendMonthlyEmail(ctx context.Context, payload sharedworker.TaskPayload) error {
+	var p SendMonthlyEmailPayload
+
+	// Unmarshal payload
+	data, _ := json.Marshal(payload)
+	if err := json.Unmarshal(data, &p); err != nil {
+		return fmt.Errorf("failed to unmarshal payload: %w", err)
+	}
+
+	// Default message if not provided
+	if p.Message == "" {
+		p.Message = "Today is the day"
+	}
+
+	fmt.Printf("[MONTHLY EMAIL] Starting monthly email task. Message: %s\n", p.Message)
+
+	// Get all users
+	users, err := h.userRepository.List(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch users: %w", err)
+	}
+
+	if len(users) == 0 {
+		fmt.Println("[MONTHLY EMAIL] No users found, skipping email send")
+		return nil
+	}
+
+	fmt.Printf("[MONTHLY EMAIL] Found %d users to send emails to\n", len(users))
+
+	// Send email to each user
+	successCount := 0
+	failureCount := 0
+
+	for _, user := range users {
+		emailMsg := &email.Email{
+			To:      []string{user.Email},
+			Subject: "Monthly Notification - Today is Special",
+			TextBody: fmt.Sprintf("Hello %s,\n\n%s\n\nBest regards,\nThe Team",
+				user.Name, p.Message),
+			HTMLBody: fmt.Sprintf(`
+				<html>
+					<body>
+						<h2>Hello %s,</h2>
+						<p>%s</p>
+						<p>Best regards,<br>The Team</p>
+					</body>
+				</html>
+			`, user.Name, p.Message),
+		}
+
+		if err := h.emailService.Send(ctx, emailMsg); err != nil {
+			fmt.Printf("[MONTHLY EMAIL] Failed to send email to %s (%s): %v\n", user.Name, user.Email, err)
+			failureCount++
+			continue
+		}
+
+		fmt.Printf("[MONTHLY EMAIL] Sent to %s (%s)\n", user.Name, user.Email)
+		successCount++
+	}
+
+	if successCount == 0 && len(users) > 0 {
+		return fmt.Errorf("failed to send email to any users: attempted %d, failed %d", len(users), failureCount)
+	}
+
+	fmt.Printf("[MONTHLY EMAIL] Task completed: %d sent, %d failed\n", successCount, failureCount)
 	return nil
 }

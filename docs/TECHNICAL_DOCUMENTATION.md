@@ -197,8 +197,10 @@ go-modular-monolith/
 │   │   │   └── errors.go            # Event-related errors
 │   │   ├── uow/
 │   │   │   └── unit_of_work.go      # Unit of Work interface
-│   │   └── validator/
-│   │       └── validator.go         # Request validation utilities
+│   │   ├── validator/
+│   │   │   └── validator.go         # Request validation utilities
+│   │   └── worker/                  # ⭐ NEW: Shared worker types & interfaces
+│   │       └── worker.go            # TaskPayload, TaskHandler, Client, Server, etc.
 │   ├── infrastructure/
 │   │   ├── cache/
 │   │   │   └── redis.go             # Redis cache implementation
@@ -1163,9 +1165,15 @@ The application supports multiple task queue and worker backends for asynchronou
 
 ```
 internal/
+├── shared/
+│   └── worker/
+│       └── worker.go              # Shared types & interfaces (TaskPayload, TaskHandler,
+│                                  # Client, Server, Scheduler, CronExpression, etc.)
 ├── infrastructure/
 │   └── worker/
-│       ├── worker.go              # Worker interface definition
+│       ├── noop.go                # No-op implementations
+│       ├── cron_scheduler.go      # Cron scheduler implementation
+│       ├── retry_policy.go        # Retry policy utilities
 │       ├── asynq/
 │       │   ├── client.go          # Asynq task client
 │       │   └── server.go          # Asynq worker server
@@ -1179,7 +1187,8 @@ internal/
     └── <module>/
         └── worker/
             ├── tasks.go           # Task definitions
-            └── handlers.go        # Task handlers
+            ├── handlers.go        # Task handlers
+            └── registrar.go       # Module task registrar
 ```
 
 ### Configuration
@@ -1235,13 +1244,18 @@ worker:
     image_processing: true
 ```
 
-### Worker Interface
+### Shared Worker Types & Interfaces
+
+All worker types and interfaces are defined in `internal/shared/worker/worker.go` so modules can use them without importing infrastructure:
 
 ```go
-// internal/infrastructure/worker/worker.go
+// internal/shared/worker/worker.go
 package worker
 
-import "context"
+import (
+    "context"
+    "time"
+)
 
 // TaskPayload defines the structure of task data
 type TaskPayload map[string]interface{}
@@ -1249,10 +1263,34 @@ type TaskPayload map[string]interface{}
 // TaskHandler processes a task
 type TaskHandler func(ctx context.Context, payload TaskPayload) error
 
+// TaskDefinition defines a task that a module provides
+type TaskDefinition struct {
+    TaskName string
+    Handler  TaskHandler
+}
+
+// CronJobDefinition defines a cron job that a module provides
+type CronJobDefinition struct {
+    JobID          string
+    TaskName       string
+    CronExpression CronExpression
+    Payload        map[string]interface{}
+}
+
+// CronExpression represents a simplified cron expression
+type CronExpression struct {
+    Minute  int // 0-59 or -1 for any
+    Hour    int // 0-23 or -1 for any
+    Day     int // 1-31 or -1 for any
+    Month   int // 1-12 or -1 for any
+    Weekday int // 0-6 (Sun-Sat) or -1 for any
+}
+
 // Client enqueues tasks
 type Client interface {
     Enqueue(ctx context.Context, taskName string, payload TaskPayload, options ...Option) error
     EnqueueDelayed(ctx context.Context, taskName string, payload TaskPayload, delay time.Duration, options ...Option) error
+    Close() error
 }
 
 // Server runs workers to process tasks
@@ -1262,8 +1300,25 @@ type Server interface {
     Stop(ctx context.Context) error
 }
 
+// Scheduler is responsible for scheduling recurring tasks
+type Scheduler interface {
+    AddJob(id, taskName string, schedule interface{}, payload TaskPayload) error
+    RemoveJob(id string) error
+    EnableJob(id string) error
+    DisableJob(id string) error
+    Start(ctx context.Context) error
+    Stop() error
+}
+
 // Option defines task options (priority, retry, timeout, etc.)
 type Option interface{}
+
+// Helper functions for CronExpression
+func EveryMinute() CronExpression
+func EveryHour() CronExpression
+func Daily(hour, minute int) CronExpression
+func Weekly(weekday, hour, minute int) CronExpression
+func Monthly(day, hour, minute int) CronExpression
 ```
 
 ### Asynq Implementation
@@ -1277,7 +1332,7 @@ package worker
 import (
     "context"
     "encoding/json"
-    workerlib "go-modular-monolith/internal/infrastructure/worker"
+    sharedworker "go-modular-monolith/internal/shared/worker"
 )
 
 const (
@@ -1296,7 +1351,7 @@ func (p SendWelcomeEmailPayload) MarshalJSON() ([]byte, error) {
 }
 
 // EnqueueWelcomeEmail enqueues a welcome email task
-func EnqueueWelcomeEmail(ctx context.Context, client workerlib.Client, userID, email, name string) error {
+func EnqueueWelcomeEmail(ctx context.Context, client sharedworker.Client, userID, email, name string) error {
     payload := SendWelcomeEmailPayload{
         UserID: userID,
         Email:  email,
@@ -1318,7 +1373,7 @@ import (
     "context"
     "encoding/json"
     "fmt"
-    workerlib "go-modular-monolith/internal/infrastructure/worker"
+    sharedworker "go-modular-monolith/internal/shared/worker"
     userdomain "go-modular-monolith/internal/modules/user/domain"
 )
 
@@ -1338,7 +1393,7 @@ func NewUserWorkerHandler(
 }
 
 // HandleSendWelcomeEmail processes the welcome email task
-func (h *UserWorkerHandler) HandleSendWelcomeEmail(ctx context.Context, payload workerlib.TaskPayload) error {
+func (h *UserWorkerHandler) HandleSendWelcomeEmail(ctx context.Context, payload sharedworker.TaskPayload) error {
     var p SendWelcomeEmailPayload
     
     // Unmarshal payload
@@ -1395,14 +1450,14 @@ import (
     "fmt"
     
     "github.com/hibiken/asynq"
-    "go-modular-monolith/internal/infrastructure/worker"
+    sharedworker "go-modular-monolith/internal/shared/worker"
     "go-modular-monolith/internal/shared/context/logger"
 )
 
 type AsynqServer struct {
     srv      *asynq.Server
     mux      *asynq.ServeMux
-    handlers map[string]worker.TaskHandler
+    handlers map[string]sharedworker.TaskHandler
     log      logger.Logger
 }
 
@@ -1420,15 +1475,15 @@ func NewAsynqServer(redisURL string, concurrency int, log logger.Logger) *AsynqS
             },
         ),
         mux:      asynq.NewServeMux(),
-        handlers: make(map[string]worker.TaskHandler),
+        handlers: make(map[string]sharedworker.TaskHandler),
         log:      log,
     }
 }
 
-func (s *AsynqServer) RegisterHandler(taskName string, handler worker.TaskHandler) error {
+func (s *AsynqServer) RegisterHandler(taskName string, handler sharedworker.TaskHandler) error {
     s.handlers[taskName] = handler
     s.mux.HandleFunc(taskName, func(ctx context.Context, t *asynq.Task) error {
-        payload := worker.TaskPayload(t.Payload())
+        payload := sharedworker.TaskPayload(t.Payload())
         return handler(ctx, payload)
     })
     s.log.Info("Registered handler for task", "task", taskName)
@@ -1460,7 +1515,7 @@ import (
     "time"
     
     "github.com/hibiken/asynq"
-    "go-modular-monolith/internal/infrastructure/worker"
+    sharedworker "go-modular-monolith/internal/shared/worker"
 )
 
 type AsynqClient struct {
@@ -1476,8 +1531,8 @@ func NewAsynqClient(redisURL string) *AsynqClient {
 func (c *AsynqClient) Enqueue(
     ctx context.Context,
     taskName string,
-    payload worker.TaskPayload,
-    options ...worker.Option,
+    payload sharedworker.TaskPayload,
+    options ...sharedworker.Option,
 ) error {
     data, err := json.Marshal(payload)
     if err != nil {
@@ -1492,9 +1547,9 @@ func (c *AsynqClient) Enqueue(
 func (c *AsynqClient) EnqueueDelayed(
     ctx context.Context,
     taskName string,
-    payload worker.TaskPayload,
+    payload sharedworker.TaskPayload,
     delay time.Duration,
-    options ...worker.Option,
+    options ...sharedworker.Option,
 ) error {
     data, err := json.Marshal(payload)
     if err != nil {
@@ -1524,9 +1579,10 @@ package rabbitmqworker
 import (
     "context"
     "encoding/json"
+    "time"
     
     amqp "github.com/rabbitmq/amqp091-go"
-    "go-modular-monolith/internal/infrastructure/worker"
+    sharedworker "go-modular-monolith/internal/shared/worker"
 )
 
 type RabbitMQClient struct {
@@ -1568,8 +1624,8 @@ func NewRabbitMQClient(url, exchange, queue string) (*RabbitMQClient, error) {
 func (c *RabbitMQClient) Enqueue(
     ctx context.Context,
     taskName string,
-    payload worker.TaskPayload,
-    options ...worker.Option,
+    payload sharedworker.TaskPayload,
+    options ...sharedworker.Option,
 ) error {
     data, err := json.Marshal(payload)
     if err != nil {
@@ -1593,9 +1649,9 @@ func (c *RabbitMQClient) Enqueue(
 func (c *RabbitMQClient) EnqueueDelayed(
     ctx context.Context,
     taskName string,
-    payload worker.TaskPayload,
+    payload sharedworker.TaskPayload,
     delay time.Duration,
-    options ...worker.Option,
+    options ...sharedworker.Option,
 ) error {
     // RabbitMQ requires plugin for delayed delivery
     // For now, just enqueue immediately
@@ -1619,10 +1675,10 @@ package redpandaworker
 import (
     "context"
     "encoding/json"
-    "fmt"
+    "time"
     
     "github.com/segmentio/kafka-go"
-    "go-modular-monolith/internal/infrastructure/worker"
+    sharedworker "go-modular-monolith/internal/shared/worker"
 )
 
 type RedpandaClient struct {
@@ -1646,8 +1702,8 @@ func NewRedpandaClient(brokers []string, topic string) *RedpandaClient {
 func (c *RedpandaClient) Enqueue(
     ctx context.Context,
     taskName string,
-    payload worker.TaskPayload,
-    options ...worker.Option,
+    payload sharedworker.TaskPayload,
+    options ...sharedworker.Option,
 ) error {
     data, err := json.Marshal(payload)
     if err != nil {
@@ -1663,9 +1719,9 @@ func (c *RedpandaClient) Enqueue(
 func (c *RedpandaClient) EnqueueDelayed(
     ctx context.Context,
     taskName string,
-    payload worker.TaskPayload,
+    payload sharedworker.TaskPayload,
     delay time.Duration,
-    options ...worker.Option,
+    options ...sharedworker.Option,
 ) error {
     // Redpanda doesn't natively support delayed delivery
     // Could use scheduled processing topic or external scheduler
@@ -1685,20 +1741,20 @@ package servicev1
 
 import (
     "context"
-    workerlib "go-modular-monolith/internal/infrastructure/worker"
+    sharedworker "go-modular-monolith/internal/shared/worker"
     userdomain "go-modular-monolith/internal/modules/user/domain"
     userworker "go-modular-monolith/internal/modules/user/worker"
 )
 
 type UserService struct {
     repository  userdomain.Repository
-    workerClient workerlib.Client
+    workerClient sharedworker.Client
     eventBus    events.EventBus
 }
 
 func NewUserService(
     repo userdomain.Repository,
-    client workerlib.Client,
+    client sharedworker.Client,
     bus events.EventBus,
 ) *UserService {
     return &UserService{
@@ -1748,14 +1804,17 @@ func (s *UserService) Create(ctx context.Context, req *userdomain.CreateUserRequ
 package core
 
 import (
-    "go-modular-monolith/internal/infrastructure/worker"
+    sharedworker "go-modular-monolith/internal/shared/worker"
     asynqworker "go-modular-monolith/internal/infrastructure/worker/asynq"
+    rabbitmqworker "go-modular-monolith/internal/infrastructure/worker/rabbitmq"
+    redpandaworker "go-modular-monolith/internal/infrastructure/worker/redpanda"
+    infraworker "go-modular-monolith/internal/infrastructure/worker"
     userworker "go-modular-monolith/internal/modules/user/worker"
 )
 
-func buildWorkerClient(config Config, featureFlags FeatureFlags) (worker.Client, error) {
+func buildWorkerClient(config Config, featureFlags FeatureFlags) (sharedworker.Client, error) {
     if !featureFlags.Worker.Enabled {
-        return &NoOpWorker{}, nil
+        return infraworker.NewNoOpClient(), nil
     }
     
     switch featureFlags.Worker.Backend {
@@ -1773,16 +1832,16 @@ func buildWorkerClient(config Config, featureFlags FeatureFlags) (worker.Client,
             config.App.Worker.Redpanda.Topic,
         ), nil
     default:
-        return &NoOpWorker{}, nil
+        return infraworker.NewNoOpClient(), nil
     }
 }
 
-func buildWorkerServer(config Config, featureFlags FeatureFlags, container *Container) (worker.Server, error) {
+func buildWorkerServer(config Config, featureFlags FeatureFlags, container *Container) (sharedworker.Server, error) {
     if !featureFlags.Worker.Enabled {
-        return &NoOpWorkerServer{}, nil
+        return infraworker.NewNoOpServer(), nil
     }
     
-    var workerServer worker.Server
+    var workerServer sharedworker.Server
     var err error
     
     switch featureFlags.Worker.Backend {
@@ -2138,7 +2197,7 @@ package worker
 import (
     "context"
     "go-modular-monolith/internal/shared/email"
-    workerlib "go-modular-monolith/internal/infrastructure/worker"
+    sharedworker "go-modular-monolith/internal/shared/worker"
 )
 
 type UserWorkerHandler struct {
@@ -2147,7 +2206,7 @@ type UserWorkerHandler struct {
 }
 
 // HandleSendWelcomeEmail processes welcome email task
-func (h *UserWorkerHandler) HandleSendWelcomeEmail(ctx context.Context, payload workerlib.TaskPayload) error {
+func (h *UserWorkerHandler) HandleSendWelcomeEmail(ctx context.Context, payload sharedworker.TaskPayload) error {
     var p SendWelcomeEmailPayload
     
     // Unmarshal and validate payload

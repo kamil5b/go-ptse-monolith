@@ -5,16 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"go-modular-monolith/internal/infrastructure/worker"
+	sharedworker "go-modular-monolith/internal/shared/worker"
 
 	"github.com/hibiken/asynq"
 )
 
-// AsynqServer is an Asynq-based implementation of the worker.Server interface
+// AsynqServer is an Asynq-based implementation of the sharedworker.Server interface
 type AsynqServer struct {
 	srv      *asynq.Server
 	mux      *asynq.ServeMux
-	handlers map[string]worker.TaskHandler
+	handlers map[string]sharedworker.TaskHandler
 }
 
 // NewAsynqServer creates a new Asynq server
@@ -32,16 +32,16 @@ func NewAsynqServer(redisURL string, concurrency int) *AsynqServer {
 			},
 		),
 		mux:      asynq.NewServeMux(),
-		handlers: make(map[string]worker.TaskHandler),
+		handlers: make(map[string]sharedworker.TaskHandler),
 	}
 }
 
 // RegisterHandler registers a handler for a task type
-func (s *AsynqServer) RegisterHandler(taskName string, handler worker.TaskHandler) error {
+func (s *AsynqServer) RegisterHandler(taskName string, handler sharedworker.TaskHandler) error {
 	s.handlers[taskName] = handler
 	s.mux.HandleFunc(taskName, func(ctx context.Context, t *asynq.Task) error {
-		// Convert Asynq task payload to worker.TaskPayload
-		var payload worker.TaskPayload
+		// Convert Asynq task payload to sharedworker.TaskPayload
+		var payload sharedworker.TaskPayload
 		if err := json.Unmarshal(t.Payload(), &payload); err != nil {
 			return fmt.Errorf("failed to unmarshal payload: %w", err)
 		}

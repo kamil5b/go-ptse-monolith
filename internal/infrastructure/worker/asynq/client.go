@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"go-modular-monolith/internal/infrastructure/worker"
+	sharedworker "go-modular-monolith/internal/shared/worker"
 
 	"github.com/hibiken/asynq"
 )
 
-// AsynqClient is an Asynq-based implementation of the worker.Client interface
+// AsynqClient is an Asynq-based implementation of the sharedworker.Client interface
 type AsynqClient struct {
 	client *asynq.Client
 }
@@ -27,8 +27,8 @@ func NewAsynqClient(redisURL string) *AsynqClient {
 func (c *AsynqClient) Enqueue(
 	ctx context.Context,
 	taskName string,
-	payload worker.TaskPayload,
-	options ...worker.Option,
+	payload sharedworker.TaskPayload,
+	options ...sharedworker.Option,
 ) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -39,14 +39,14 @@ func (c *AsynqClient) Enqueue(
 	asynqOptions := []asynq.Option{}
 	for _, opt := range options {
 		switch o := opt.(type) {
-		case *worker.PriorityOption:
+		case *sharedworker.PriorityOption:
 			// Asynq doesn't have Priority option, use Queue instead
 			asynqOptions = append(asynqOptions, asynq.Queue(fmt.Sprintf("queue_%d", o.Priority)))
-		case *worker.MaxRetriesOption:
+		case *sharedworker.MaxRetriesOption:
 			asynqOptions = append(asynqOptions, asynq.MaxRetry(o.MaxRetries))
-		case *worker.TimeoutOption:
+		case *sharedworker.TimeoutOption:
 			asynqOptions = append(asynqOptions, asynq.Timeout(o.Timeout))
-		case *worker.QueueOption:
+		case *sharedworker.QueueOption:
 			asynqOptions = append(asynqOptions, asynq.Queue(o.Queue))
 		}
 	}
@@ -64,9 +64,9 @@ func (c *AsynqClient) Enqueue(
 func (c *AsynqClient) EnqueueDelayed(
 	ctx context.Context,
 	taskName string,
-	payload worker.TaskPayload,
+	payload sharedworker.TaskPayload,
 	delay time.Duration,
-	options ...worker.Option,
+	options ...sharedworker.Option,
 ) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -77,14 +77,14 @@ func (c *AsynqClient) EnqueueDelayed(
 	asynqOptions := []asynq.Option{asynq.ProcessIn(delay)}
 	for _, opt := range options {
 		switch o := opt.(type) {
-		case *worker.PriorityOption:
+		case *sharedworker.PriorityOption:
 			// Asynq doesn't have Priority option, use Queue instead
 			asynqOptions = append(asynqOptions, asynq.Queue(fmt.Sprintf("queue_%d", o.Priority)))
-		case *worker.MaxRetriesOption:
+		case *sharedworker.MaxRetriesOption:
 			asynqOptions = append(asynqOptions, asynq.MaxRetry(o.MaxRetries))
-		case *worker.TimeoutOption:
+		case *sharedworker.TimeoutOption:
 			asynqOptions = append(asynqOptions, asynq.Timeout(o.Timeout))
-		case *worker.QueueOption:
+		case *sharedworker.QueueOption:
 			asynqOptions = append(asynqOptions, asynq.Queue(o.Queue))
 		}
 	}

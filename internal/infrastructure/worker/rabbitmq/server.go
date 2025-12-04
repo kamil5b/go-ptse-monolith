@@ -5,18 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"go-modular-monolith/internal/infrastructure/worker"
+	sharedworker "go-modular-monolith/internal/shared/worker"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// RabbitMQServer is a RabbitMQ-based implementation of the worker.Server interface
+// RabbitMQServer is a RabbitMQ-based implementation of the sharedworker.Server interface
 type RabbitMQServer struct {
 	conn     *amqp.Connection
 	channel  *amqp.Channel
 	exchange string
 	queue    string
-	handlers map[string]worker.TaskHandler
+	handlers map[string]sharedworker.TaskHandler
 	done     chan struct{}
 }
 
@@ -59,13 +59,13 @@ func NewRabbitMQServer(url, exchange, queue string, prefetchCount int) (*RabbitM
 		channel:  ch,
 		exchange: exchange,
 		queue:    queue,
-		handlers: make(map[string]worker.TaskHandler),
+		handlers: make(map[string]sharedworker.TaskHandler),
 		done:     make(chan struct{}),
 	}, nil
 }
 
 // RegisterHandler registers a handler for a task type
-func (s *RabbitMQServer) RegisterHandler(taskName string, handler worker.TaskHandler) error {
+func (s *RabbitMQServer) RegisterHandler(taskName string, handler sharedworker.TaskHandler) error {
 	s.handlers[taskName] = handler
 	// Bind queue to exchange with routing key
 	if err := s.channel.QueueBind(s.queue, taskName, s.exchange, false, nil); err != nil {
@@ -101,7 +101,7 @@ func (s *RabbitMQServer) Start(ctx context.Context) error {
 			}
 
 			// Parse payload
-			var payload worker.TaskPayload
+			var payload sharedworker.TaskPayload
 			if err := json.Unmarshal(msg.Body, &payload); err != nil {
 				// Payload is invalid, nack and don't requeue
 				msg.Nack(false, false)

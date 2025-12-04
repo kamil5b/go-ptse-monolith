@@ -44,6 +44,20 @@ The worker system is organized with a clean separation of concerns:
 
 ## Files
 
+### Shared Worker Types (`internal/shared/worker/`)
+
+#### `worker.go` - Shared Types & Interfaces
+Defines all types and interfaces used across the application:
+- **TaskPayload** - Map type for task data
+- **TaskHandler** - Function type for processing tasks
+- **TaskDefinition** - Task with name and handler
+- **CronJobDefinition** - Cron job with schedule
+- **CronExpression** - Simplified cron expression
+- **Client** - Interface for enqueueing tasks
+- **Server** - Interface for processing tasks
+- **Scheduler** - Interface for scheduling recurring tasks
+- Option types: Priority, MaxRetries, Timeout, Queue
+
 ### Core Worker System (`internal/app/worker/`)
 
 #### 1. `manager.go` - WorkerManager
@@ -130,14 +144,14 @@ package worker
 
 import (
     "context"
-    "go-modular-monolith/internal/infrastructure/worker"
+    sharedworker "go-modular-monolith/internal/shared/worker"
 )
 
 type MyModuleWorkerHandler struct {
     // dependencies...
 }
 
-func (h *MyModuleWorkerHandler) HandleMyTask(ctx context.Context, payload worker.TaskPayload) error {
+func (h *MyModuleWorkerHandler) HandleMyTask(ctx context.Context, payload sharedworker.TaskPayload) error {
     // Implement task logic
     return nil
 }

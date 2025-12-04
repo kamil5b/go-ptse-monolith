@@ -8,9 +8,10 @@ import (
 	"go-modular-monolith/internal/shared/events"
 	"go-modular-monolith/internal/shared/storage"
 	"go-modular-monolith/internal/shared/uow"
+	sharedworker "go-modular-monolith/internal/shared/worker"
 
 	// Worker infrastructure
-	"go-modular-monolith/internal/infrastructure/worker"
+	infraworker "go-modular-monolith/internal/infrastructure/worker"
 	asynqworker "go-modular-monolith/internal/infrastructure/worker/asynq"
 	rabbitmqworker "go-modular-monolith/internal/infrastructure/worker/rabbitmq"
 	redpandaworker "go-modular-monolith/internal/infrastructure/worker/redpanda"
@@ -92,8 +93,8 @@ type Container struct {
 	AuthMiddleware *middleware.AuthMiddleware
 
 	// Worker (infrastructure)
-	WorkerClient worker.Client
-	WorkerServer worker.Server
+	WorkerClient sharedworker.Client
+	WorkerServer sharedworker.Server
 }
 
 func NewContainer(
@@ -269,8 +270,8 @@ func NewContainer(
 	authMiddleware = middleware.NewAuthMiddleware(authService, middlewareConfig)
 
 	// Initialize worker client and server
-	var workerClient worker.Client
-	var workerServer worker.Server
+	var workerClient sharedworker.Client
+	var workerServer sharedworker.Server
 
 	if featureFlag.Worker.Enabled && featureFlag.Worker.Backend != "disable" && config != nil {
 		// Initialize worker client
@@ -285,7 +286,7 @@ func NewContainer(
 			); err == nil {
 				workerClient = client
 			} else {
-				workerClient = worker.NewNoOpClient()
+				workerClient = infraworker.NewNoOpClient()
 			}
 		case "redpanda":
 			workerClient = redpandaworker.NewRedpandaClient(
@@ -293,7 +294,7 @@ func NewContainer(
 				config.App.Worker.Redpanda.Topic,
 			)
 		default:
-			workerClient = worker.NewNoOpClient()
+			workerClient = infraworker.NewNoOpClient()
 		}
 
 		// Initialize worker server
@@ -312,7 +313,7 @@ func NewContainer(
 			); err == nil {
 				workerServer = server
 			} else {
-				workerServer = worker.NewNoOpServer()
+				workerServer = infraworker.NewNoOpServer()
 			}
 		case "redpanda":
 			workerServer = redpandaworker.NewRedpandaServer(
@@ -322,12 +323,12 @@ func NewContainer(
 				config.App.Worker.Redpanda.WorkerCount,
 			)
 		default:
-			workerServer = worker.NewNoOpServer()
+			workerServer = infraworker.NewNoOpServer()
 		}
 	} else {
 		// Use no-op implementations when workers are disabled
-		workerClient = worker.NewNoOpClient()
-		workerServer = worker.NewNoOpServer()
+		workerClient = infraworker.NewNoOpClient()
+		workerServer = infraworker.NewNoOpServer()
 	}
 
 	// Initialize storage service (before modules that depend on it)

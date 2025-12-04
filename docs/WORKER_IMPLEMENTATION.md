@@ -10,11 +10,16 @@ Successfully implemented comprehensive worker support for the go-modular-monolit
 
 ## Implementation Details
 
-### 1. Worker Infrastructure (`internal/infrastructure/worker/`)
+### 1. Shared Worker Types (`internal/shared/worker/`)
 
-#### Base Interfaces (`worker.go`)
+#### Base Types & Interfaces (`worker.go`)
+The shared worker package defines types and interfaces that can be used by modules without importing infrastructure:
+
 - **TaskPayload** - Map type for flexible task data
 - **TaskHandler** - Function type for task processing
+- **TaskDefinition** - Defines a task with name and handler
+- **CronJobDefinition** - Defines a cron job with schedule
+- **CronExpression** - Simplified cron expression for scheduling
 - **Client** - Interface for enqueueing tasks
   - `Enqueue()` - Immediate task enqueueing
   - `EnqueueDelayed()` - Delayed task enqueueing
@@ -23,6 +28,11 @@ Successfully implemented comprehensive worker support for the go-modular-monolit
   - `RegisterHandler()` - Register task handlers
   - `Start()` - Start the worker server
   - `Stop()` - Graceful shutdown
+- **Scheduler** - Interface for scheduling recurring tasks
+  - `AddJob()` - Add a new scheduled job
+  - `RemoveJob()` - Remove a scheduled job
+  - `EnableJob()` / `DisableJob()` - Enable/disable jobs
+  - `Start()` / `Stop()` - Control scheduler lifecycle
 
 #### Task Options
 - **PriorityOption** - Set task priority
@@ -30,7 +40,18 @@ Successfully implemented comprehensive worker support for the go-modular-monolit
 - **TimeoutOption** - Set task timeout
 - **QueueOption** - Specify queue/topic
 
-### 2. Asynq Backend (`internal/infrastructure/worker/asynq/`)
+#### Cron Expression Helpers
+- `EveryMinute()` - Run every minute
+- `EveryHour()` - Run every hour at minute 0
+- `Daily(hour, minute)` - Run daily at specified time
+- `Weekly(weekday, hour, minute)` - Run weekly on specified day
+- `Monthly(day, hour, minute)` - Run monthly on specified day
+
+### 2. Worker Infrastructure (`internal/infrastructure/worker/`)
+
+The infrastructure layer contains implementations of the shared interfaces:
+
+### 3. Asynq Backend (`internal/infrastructure/worker/asynq/`)
 
 **Client** (`client.go`)
 - Enqueues tasks to Redis
@@ -47,7 +68,7 @@ Successfully implemented comprehensive worker support for the go-modular-monolit
 - Automatic payload unmarshaling
 - Clean error handling
 
-### 3. RabbitMQ Backend (`internal/infrastructure/worker/rabbitmq/`)
+### 4. RabbitMQ Backend (`internal/infrastructure/worker/rabbitmq/`)
 
 **Client** (`client.go`)
 - Publishes messages to RabbitMQ
@@ -62,7 +83,7 @@ Successfully implemented comprehensive worker support for the go-modular-monolit
 - Requeue on failure
 - Configurable prefetch count
 
-### 4. Redpanda Backend (`internal/infrastructure/worker/redpanda/`)
+### 5. Redpanda Backend (`internal/infrastructure/worker/redpanda/`)
 
 **Client** (`client.go`)
 - Produces messages to Redpanda/Kafka
@@ -76,14 +97,14 @@ Successfully implemented comprehensive worker support for the go-modular-monolit
 - Message offset management
 - Configurable worker count
 
-### 5. No-Op Implementation (`noop.go`)
+### 6. No-Op Implementation (`noop.go`)
 
 - **NoOpClient** - Disabled workers, no-op enqueueing
 - **NoOpServer** - Disabled workers, no-op processing
 - Used when workers are disabled via feature flags
 - Allows clean testing and development without broker infrastructure
 
-### 6. Configuration
+### 7. Configuration
 
 #### Config Structure (`internal/app/core/config.go`)
 
@@ -120,7 +141,7 @@ Added `WorkerFeatureFlag` with:
   - report_generation
   - image_processing
 
-### 7. Container Integration (`internal/app/core/container.go`)
+### 8. Container Integration (`internal/app/core/container.go`)
 
 - **WorkerClient** field - Injected into services for enqueueing
 - **WorkerServer** field - Started in bootstrap for processing
@@ -128,7 +149,7 @@ Added `WorkerFeatureFlag` with:
 - Graceful fallback to NoOp implementations on errors
 - Automatic initialization of all three backends
 
-### 8. User Module Worker (`internal/modules/user/worker/`)
+### 9. User Module Worker (`internal/modules/user/worker/`)
 
 #### Task Definitions (`tasks.go`)
 - **TaskSendWelcomeEmail** - Send welcome email after registration
@@ -143,7 +164,7 @@ Added `WorkerFeatureFlag` with:
 - Error handling and logging
 - Production-ready structure with placeholders for email/storage services
 
-### 9. Configuration Files
+### 10. Configuration Files
 
 #### config/config.yaml
 - Worker configuration examples for all three backends
@@ -248,7 +269,7 @@ workerServer.RegisterHandler(
 ## Files Created/Modified
 
 ### Created Files
-- `internal/infrastructure/worker/worker.go`
+- `internal/shared/worker/worker.go` (shared types & interfaces)
 - `internal/infrastructure/worker/noop.go`
 - `internal/infrastructure/worker/asynq/client.go`
 - `internal/infrastructure/worker/asynq/server.go`

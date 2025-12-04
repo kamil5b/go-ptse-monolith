@@ -39,12 +39,25 @@
              │     └─ RegisterTasks(...)
              │        └─ Check feature flags
              │        └─ Add to TaskRegistry
+             │           (uses sharedworker.TaskHandler)
              │
              ├─ WorkerManager.RegisterTasks()
              │  └─ Register all tasks with server
              │
              └─ WorkerManager.Start()
                 └─ Start worker server
+
+## Package Architecture
+
+```
+internal/shared/worker/           ← Types & Interfaces (TaskPayload, TaskHandler,
+│                                   Client, Server, Scheduler, CronExpression)
+│
+internal/infrastructure/worker/   ← Implementations (Asynq, RabbitMQ, Redpanda, NoOp)
+│
+internal/app/worker/              ← Manager & Registry
+│
+internal/modules/*/worker/        ← Module-specific handlers & registrars
 ```
 
 ## Quick Start
@@ -149,7 +162,10 @@ File: `internal/modules/mymodule/worker/handlers.go`
 ```go
 package worker
 
-import "go-modular-monolith/internal/infrastructure/worker"
+import (
+    "context"
+    sharedworker "go-modular-monolith/internal/shared/worker"
+)
 
 type MyModuleHandler struct {
     // dependencies
@@ -157,7 +173,7 @@ type MyModuleHandler struct {
 
 func (h *MyModuleHandler) HandleMyAction(
     ctx context.Context,
-    payload worker.TaskPayload,
+    payload sharedworker.TaskPayload,
 ) error {
     // Implement logic
     return nil

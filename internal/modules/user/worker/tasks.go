@@ -12,6 +12,9 @@ const (
 
 	// TaskGenerateUserReport is the task name for generating user reports
 	TaskGenerateUserReport = "user:generate_user_report"
+
+	// TaskSendMonthlyEmail is the task name for sending monthly emails to all users
+	TaskSendMonthlyEmail = "user:send_monthly_email"
 )
 
 // SendWelcomeEmailPayload is the payload for the welcome email task
@@ -44,4 +47,9 @@ type GenerateUserReportPayload struct {
 	StartDate   string `json:"start_date"`
 	EndDate     string `json:"end_date"`
 	Destination string `json:"destination"`
+}
+
+// SendMonthlyEmailPayload is the payload for the monthly email task
+type SendMonthlyEmailPayload struct {
+	Message string `json:"message"` // Message to send to all users
 }

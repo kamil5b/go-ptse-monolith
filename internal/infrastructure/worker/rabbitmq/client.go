@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"go-modular-monolith/internal/infrastructure/worker"
+	sharedworker "go-modular-monolith/internal/shared/worker"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -58,8 +58,8 @@ func NewRabbitMQClient(url, exchange, queue string) (*RabbitMQClient, error) {
 func (c *RabbitMQClient) Enqueue(
 	ctx context.Context,
 	taskName string,
-	payload worker.TaskPayload,
-	options ...worker.Option,
+	payload sharedworker.TaskPayload,
+	options ...sharedworker.Option,
 ) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -86,9 +86,9 @@ func (c *RabbitMQClient) Enqueue(
 func (c *RabbitMQClient) EnqueueDelayed(
 	ctx context.Context,
 	taskName string,
-	payload worker.TaskPayload,
+	payload sharedworker.TaskPayload,
 	delay time.Duration,
-	options ...worker.Option,
+	options ...sharedworker.Option,
 ) error {
 	// Use RabbitMQ Delayed Message Plugin for delayed delivery
 	// Plugin: https://github.com/rabbitmq/rabbitmq-delayed-message-exchange

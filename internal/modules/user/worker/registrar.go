@@ -1,66 +1,103 @@
 package worker
 
 import (
-	"fmt"
-
-	"go-modular-monolith/internal/app/core"
-	appworker "go-modular-monolith/internal/app/worker"
+	userdomain "go-modular-monolith/internal/modules/user/domain"
+	sharedemail "go-modular-monolith/internal/shared/email"
+	sharedworker "go-modular-monolith/internal/shared/worker"
 )
 
-// UserModuleRegistrar implements the ModuleTaskRegistrar interface for user module tasks
-type UserModuleRegistrar struct{}
+// TaskDefinition defines a task that the module provides
+type TaskDefinition = sharedworker.TaskDefinition
 
-// NewUserModuleRegistrar creates a new user module task registrar
-func NewUserModuleRegistrar() *UserModuleRegistrar {
-	return &UserModuleRegistrar{}
+// CronJobDefinition defines a cron job that the module provides
+type CronJobDefinition = sharedworker.CronJobDefinition
+
+// UserModuleWorkerTasks provides task and cron job definitions for the user module
+type UserModuleWorkerTasks struct{}
+
+// NewUserModuleWorkerTasks creates a new user module worker tasks provider
+func NewUserModuleWorkerTasks() *UserModuleWorkerTasks {
+	return &UserModuleWorkerTasks{}
 }
 
-// RegisterTasks registers all user module tasks based on feature flags
-func (r *UserModuleRegistrar) RegisterTasks(
-	registry *appworker.TaskRegistry,
-	container *core.Container,
-	featureFlags *core.FeatureFlag,
-) error {
-	// Create user worker handler once for all email tasks
+// GetTaskDefinitions returns all task definitions for the user module
+func (u *UserModuleWorkerTasks) GetTaskDefinitions(
+	userRepository interface{},
+	emailService interface{},
+	emailNotificationsEnabled bool,
+	dataExportEnabled bool,
+	reportGenerationEnabled bool,
+) []sharedworker.TaskDefinition {
+	// Cast to actual types (safe because bootstrap.worker.go passes correct types)
+	userRepo := userRepository.(userdomain.Repository)
+	emailSvc := emailService.(sharedemail.EmailService)
+
 	userHandler := NewUserWorkerHandler(
-		container.UserRepository,
-		container.EmailClient,
+		userRepo,
+		emailSvc,
 	)
 
-	// Register email notification tasks if enabled
-	if featureFlags.Worker.Tasks.EmailNotifications {
-		fmt.Println("[INFO] Registering user email notification tasks...")
+	tasks := []sharedworker.TaskDefinition{}
 
-		// Welcome email task
-		registry.Register(
-			TaskSendWelcomeEmail,
-			userHandler.HandleSendWelcomeEmail,
-		)
-
-		// Password reset email task
-		registry.Register(
-			TaskSendPasswordResetEmail,
-			userHandler.HandleSendPasswordResetEmail,
-		)
-	}
-
-	// Register data export task if enabled
-	if featureFlags.Worker.Tasks.DataExport {
-		fmt.Println("[INFO] Registering user data export task...")
-		registry.Register(
-			TaskExportUserData,
-			userHandler.HandleExportUserData,
+	// Add email notification tasks
+	if emailNotificationsEnabled {
+		tasks = append(tasks,
+			sharedworker.TaskDefinition{
+				TaskName: TaskSendWelcomeEmail,
+				Handler:  userHandler.HandleSendWelcomeEmail,
+			},
+			sharedworker.TaskDefinition{
+				TaskName: TaskSendPasswordResetEmail,
+				Handler:  userHandler.HandleSendPasswordResetEmail,
+			},
+			sharedworker.TaskDefinition{
+				TaskName: TaskSendMonthlyEmail,
+				Handler:  userHandler.HandleSendMonthlyEmail,
+			},
 		)
 	}
 
-	// Register report generation task if enabled
-	if featureFlags.Worker.Tasks.ReportGeneration {
-		fmt.Println("[INFO] Registering user report generation task...")
-		registry.Register(
-			TaskGenerateUserReport,
-			userHandler.HandleGenerateUserReport,
+	// Add data export task
+	if dataExportEnabled {
+		tasks = append(tasks,
+			sharedworker.TaskDefinition{
+				TaskName: TaskExportUserData,
+				Handler:  userHandler.HandleExportUserData,
+			},
 		)
 	}
 
-	return nil
+	// Add report generation task
+	if reportGenerationEnabled {
+		tasks = append(tasks,
+			sharedworker.TaskDefinition{
+				TaskName: TaskGenerateUserReport,
+				Handler:  userHandler.HandleGenerateUserReport,
+			},
+		)
+	}
+
+	return tasks
+}
+
+// GetCronJobDefinitions returns all cron job definitions for the user module
+func (u *UserModuleWorkerTasks) GetCronJobDefinitions(
+	emailNotificationsEnabled bool,
+) []sharedworker.CronJobDefinition {
+	jobs := []sharedworker.CronJobDefinition{}
+
+	if emailNotificationsEnabled {
+		jobs = append(jobs,
+			sharedworker.CronJobDefinition{
+				JobID:    "monthly_email_to_all_users",
+				TaskName: TaskSendMonthlyEmail,
+				// CronExpression will be set by app layer: infraworker.Monthly(15, 9, 0)
+				Payload: map[string]interface{}{
+					"message": "Today is the day",
+				},
+			},
+		)
+	}
+
+	return jobs
 }

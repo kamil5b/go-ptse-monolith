@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"go-modular-monolith/internal/infrastructure/worker"
+	sharedworker "go-modular-monolith/internal/shared/worker"
 
 	"github.com/segmentio/kafka-go"
 )
@@ -35,8 +35,8 @@ func NewRedpandaClient(brokers []string, topic string) *RedpandaClient {
 func (c *RedpandaClient) Enqueue(
 	ctx context.Context,
 	taskName string,
-	payload worker.TaskPayload,
-	options ...worker.Option,
+	payload sharedworker.TaskPayload,
+	options ...sharedworker.Option,
 ) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -55,9 +55,9 @@ func (c *RedpandaClient) Enqueue(
 func (c *RedpandaClient) EnqueueDelayed(
 	ctx context.Context,
 	taskName string,
-	payload worker.TaskPayload,
+	payload sharedworker.TaskPayload,
 	delay time.Duration,
-	options ...worker.Option,
+	options ...sharedworker.Option,
 ) error {
 	data, err := json.Marshal(payload)
 	if err != nil {

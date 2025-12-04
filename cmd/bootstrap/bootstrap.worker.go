@@ -73,11 +73,18 @@ func RunWorker() error {
 	fmt.Println("[INFO] Setting up task registrations...")
 	moduleRegistry := worker.NewModuleRegistry()
 
-	// Register user module tasks
-	moduleRegistry.Register(userworker.NewUserModuleRegistrar())
+	// Register user module tasks (module only provides definitions, no app imports)
+	moduleRegistry.Register(userworker.NewUserModuleWorkerTasks())
 
-	// Register all module tasks
-	if err := moduleRegistry.RegisterAll(workerManager.GetRegistry(), container, featureFlag); err != nil {
+	// Register all module tasks with the task registry
+	if err := moduleRegistry.RegisterAllTasks(
+		workerManager.GetRegistry(),
+		container.UserRepository,
+		container.EmailClient,
+		featureFlag.Worker.Tasks.EmailNotifications,
+		featureFlag.Worker.Tasks.DataExport,
+		featureFlag.Worker.Tasks.ReportGeneration,
+	); err != nil {
 		return fmt.Errorf("failed to register module tasks: %w", err)
 	}
 
@@ -85,6 +92,15 @@ func RunWorker() error {
 	fmt.Println("[INFO] Registering all tasks with worker server...")
 	if err := workerManager.RegisterTasks(); err != nil {
 		return fmt.Errorf("failed to register tasks: %w", err)
+	}
+
+	// Register all cron jobs from modules
+	fmt.Println("[INFO] Registering cron jobs...")
+	if err := moduleRegistry.RegisterAllCronJobs(
+		workerManager.GetCronScheduler(),
+		featureFlag.Worker.Tasks.EmailNotifications,
+	); err != nil {
+		return fmt.Errorf("failed to register cron jobs: %w", err)
 	}
 
 	// Create a context that can be canceled by signals

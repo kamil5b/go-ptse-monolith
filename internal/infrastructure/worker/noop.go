@@ -3,6 +3,8 @@ package worker
 import (
 	"context"
 	"time"
+
+	sharedworker "go-modular-monolith/internal/shared/worker"
 )
 
 // NoOpClient is a no-op implementation of the Client interface
@@ -18,8 +20,8 @@ func NewNoOpClient() *NoOpClient {
 func (c *NoOpClient) Enqueue(
 	ctx context.Context,
 	taskName string,
-	payload TaskPayload,
-	options ...Option,
+	payload sharedworker.TaskPayload,
+	options ...sharedworker.Option,
 ) error {
 	return nil
 }
@@ -28,9 +30,9 @@ func (c *NoOpClient) Enqueue(
 func (c *NoOpClient) EnqueueDelayed(
 	ctx context.Context,
 	taskName string,
-	payload TaskPayload,
+	payload sharedworker.TaskPayload,
 	delay time.Duration,
-	options ...Option,
+	options ...sharedworker.Option,
 ) error {
 	return nil
 }
@@ -50,7 +52,7 @@ func NewNoOpServer() *NoOpServer {
 }
 
 // RegisterHandler is a no-op
-func (s *NoOpServer) RegisterHandler(taskName string, handler TaskHandler) error {
+func (s *NoOpServer) RegisterHandler(taskName string, handler sharedworker.TaskHandler) error {
 	return nil
 }
 
