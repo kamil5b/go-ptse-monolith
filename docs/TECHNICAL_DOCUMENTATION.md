@@ -1,7 +1,7 @@
 # Go-PSTE-Monolith - Technical Documentation
 
-> **Version:** 2.0.0  
-> **Last Updated:** December 2, 2025  
+> **Version:** 2.1.0  
+> **Last Updated:** December 4, 2025  
 > **Go Version:** 1.24.7
 
 ---
@@ -35,7 +35,6 @@
 
 Go-PSTE-Monolith is a production-ready, modular monolithic application built with Go. It implements clean architecture principles with pluggable components, allowing teams to:
 
-- **Switch HTTP frameworks** (Echo/Gin) via configuration
 - **Switch HTTP frameworks** (Echo, Gin, net/http, fasthttp, Fiber) via configuration
 - **Swap database backends** (PostgreSQL/MongoDB) per module
 - **Version handlers, services, and repositories** independently
@@ -54,7 +53,7 @@ Go-PSTE-Monolith is a production-ready, modular monolithic application built wit
 | NoSQL Database | MongoDB |
 | Migrations | Goose (SQL), mongosh (MongoDB) |
 | Authentication | JWT (golang-jwt/jwt/v5) |
-| Logging | Zerolog |
+| Logging | Logrus (sirupsen/logrus) |
 | Password Hashing | golang.org/x/crypto/bcrypt |
 | UUID Generation | github.com/google/uuid |
 | Validation | go-playground/validator/v10 |
@@ -166,7 +165,8 @@ github.com/kamil5b/go-ptse-monolith/
 ├── cmd/
 │   ├── bootstrap/
 │   │   ├── bootstrap.server.go      # Server initialization
-│   │   └── bootstrap.migration.go   # Migration runner
+│   │   ├── bootstrap.migration.go   # Migration runner
+│   │   └── bootstrap.worker.go      # Worker initialization
 │   └── lint-deps/
 │       └── main.go                  # Dependency linter CLI tool
 ├── internal/
@@ -175,18 +175,32 @@ github.com/kamil5b/go-ptse-monolith/
 │   │   │   ├── config.go            # Config structs & loader
 │   │   │   ├── container.go         # Dependency injection container
 │   │   │   └── feature_flag.go      # Feature flag structs & loader
-│   │   └── http/
-│   │       ├── echo.go              # Echo server setup
-│   │       ├── gin.go               # Gin server setup
-│   │       ├── helpers.go           # Middleware helpers
-│   │       └── routes.go            # Route definitions
-│   ├── shared/                      # ⭐ NEW: Shared Kernel
+│   │   ├── http/
+│   │   │   ├── echo.go              # Echo server setup
+│   │   │   ├── gin.go               # Gin server setup
+│   │   │   ├── fiber.go             # Fiber server setup
+│   │   │   ├── fasthttp.go          # FastHTTP server setup
+│   │   │   ├── nethttp.go           # net/http server setup
+│   │   │   ├── helpers.go           # Middleware helpers
+│   │   │   └── routes.go            # Route definitions
+│   │   └── worker/
+│   │       ├── manager.go           # Worker manager
+│   │       └── registrar.go         # Module task registrar
+│   ├── shared/                      # Shared Kernel
 │   │   ├── cache/
 │   │   │   ├── cache.go             # Cache interface definition
 │   │   │   ├── errors.go            # Cache error types
-│   │   │   └── memory.go            # In-memory cache implementation
+│   │   │   ├── memory.go            # In-memory cache implementation
+│   │   │   └── mocks/               # Cache mocks for testing
 │   │   ├── context/
-│   │   │   └── context.go           # Shared HTTP context interface
+│   │   │   ├── context.go           # Shared HTTP context interface
+│   │   │   ├── context_key.go       # Context key definitions
+│   │   │   ├── util.go              # Context utilities
+│   │   │   └── mocks/               # Context mocks for testing
+│   │   ├── email/
+│   │   │   ├── email.go             # Email service interface & types
+│   │   │   ├── noop.go              # NoOp email service
+│   │   │   └── mocks/               # Email mocks for testing
 │   │   ├── errors/
 │   │   │   ├── errors.go            # Domain error types
 │   │   │   ├── http.go              # HTTP status mapping
@@ -194,13 +208,22 @@ github.com/kamil5b/go-ptse-monolith/
 │   │   ├── events/
 │   │   │   ├── event.go             # EventBus interface & Event struct
 │   │   │   ├── memory_bus.go        # In-memory EventBus implementation
-│   │   │   └── errors.go            # Event-related errors
+│   │   │   ├── errors.go            # Event-related errors
+│   │   │   └── mocks/               # Event bus mocks for testing
+│   │   ├── model/
+│   │   │   ├── request.go           # Common request models
+│   │   │   └── response.go          # Common response models
+│   │   ├── storage/
+│   │   │   ├── storage.go           # Storage service interface
+│   │   │   ├── errors.go            # Storage error types
+│   │   │   └── mocks/               # Storage mocks for testing
 │   │   ├── uow/
 │   │   │   └── unit_of_work.go      # Unit of Work interface
 │   │   ├── validator/
 │   │   │   └── validator.go         # Request validation utilities
-│   │   └── worker/                  # ⭐ NEW: Shared worker types & interfaces
-│   │       └── worker.go            # TaskPayload, TaskHandler, Client, Server, etc.
+│   │   └── worker/
+│   │       ├── worker.go            # TaskPayload, TaskHandler, Client, Server, etc.
+│   │       └── mocks/               # Worker mocks for testing
 │   ├── infrastructure/
 │   │   ├── cache/
 │   │   │   └── redis.go             # Redis cache implementation
@@ -216,16 +239,31 @@ github.com/kamil5b/go-ptse-monolith/
 │   │   ├── cache/
 │   │   │   └── redis.go             # Redis cache implementation
 │   │   ├── logger/                  # Logger infrastructure
-│   │   └── storage/                 # File storage (planned)
+│   │   ├── email/                   # Email providers
+│   │   │   ├── smtp/                # SMTP email service
+│   │   │   ├── mailgun/             # Mailgun email service
+│   │   │   └── template/            # Email template loader
+│   │   ├── storage/                 # File storage
+│   │   │   ├── local/               # Local filesystem storage
+│   │   │   ├── s3/                  # AWS S3 & S3-compatible storage
+│   │   │   ├── gcs/                 # Google Cloud Storage
+│   │   │   └── noop/                # NoOp storage for testing
+│   │   └── worker/                  # Worker implementations
+│   │       ├── asynq/               # Asynq (Redis) worker
+│   │       ├── rabbitmq/            # RabbitMQ worker
+│   │       ├── redpanda/            # Redpanda/Kafka worker
+│   │       ├── cron_scheduler.go    # Cron job scheduler
+│   │       ├── retry_policy.go      # Retry policy utilities
+│   │       └── noop.go              # NoOp worker for testing
 │   ├── modules/
 │   │   ├── auth/
-│   │   │   ├── domain/              # ⭐ NEW: Module-specific domain
+│   │   │   ├── domain/              # Module-specific domain
 │   │   │   │   ├── model.go         # Auth entities
 │   │   │   │   ├── interfaces.go    # Handler/Service/Repo/ACL interfaces
 │   │   │   │   ├── request.go       # Request DTOs
 │   │   │   │   ├── response.go      # Response DTOs
 │   │   │   │   └── events.go        # Domain events
-│   │   │   ├── acl/                 # ⭐ NEW: Anti-Corruption Layer
+│   │   │   ├── acl/                 # Anti-Corruption Layer
 │   │   │   │   └── user_creator.go  # ACL adapter for user module
 │   │   │   ├── handler/
 │   │   │   │   ├── v1/              # v1 handler implementation
@@ -239,7 +277,7 @@ github.com/kamil5b/go-ptse-monolith/
 │   │   │       ├── mongo/           # MongoDB repository
 │   │   │       └── noop/            # No-op repository
 │   │   ├── product/
-│   │   │   ├── domain/              # ⭐ NEW: Module-specific domain
+│   │   │   ├── domain/              # Module-specific domain
 │   │   │   │   ├── model.go
 │   │   │   │   ├── interfaces.go
 │   │   │   │   ├── request.go
@@ -256,7 +294,7 @@ github.com/kamil5b/go-ptse-monolith/
 │   │   │       ├── mongo/
 │   │   │       └── noop/
 │   │   ├── user/
-│   │   │   ├── domain/              # ⭐ NEW: Module-specific domain
+│   │   │   ├── domain/              # ⭐ Module-specific domain
 │   │   │   │   ├── model.go
 │   │   │   │   ├── interfaces.go
 │   │   │   │   ├── request.go
@@ -264,40 +302,47 @@ github.com/kamil5b/go-ptse-monolith/
 │   │   │   │   └── events.go
 │   │   │   ├── handler/v1/
 │   │   │   ├── service/v1/
-│   │   │   └── repository/sql/
+│   │   │   ├── repository/sql/
+│   │   │   └── worker/              # User module worker tasks
+│   │   │       ├── tasks.go         # Task definitions & payloads
+│   │   │       ├── handlers.go      # Task handlers
+│   │   │       └── registrar.go     # Module task registrar
 │   │   └── unitofwork/              # Unit of Work implementations
 │   │       ├── default.unitofwork.go
 │   │       ├── sql.unitofwork.go
 │   │       └── mongo.unitofwork.go
 │   ├── transports/
-│   │   └── http/
-│   │       ├── echo/
-│   │       │   ├── adapter.echo.go
-│   │       │   └── context.echo.go
-│   │       ├── gin/
-│   │       │   ├── adapter.gin.go
-│   │       │   └── context.gin.go
-│   │       ├── nethttp/                       # native net/http adapters
-│   │       │   ├── adapter.nethttp.go
-│   │       │   └── context.nethttp.go
-│   │       ├── fasthttp/                      # fasthttp adapters (github.com/valyala/fasthttp)
-│   │       │   ├── adapter.fasthttp.go
-│   │       │   └── context.fasthttp.go
-│   │       └── fiber/                         # Fiber adapters (github.com/gofiber/fiber)
-│   │           ├── adapter.fiber.go
-│   │           └── context.fiber.go
-│   └── proto/                       # gRPC protobuf definitions (planned)
-└── pkg/
-    ├── constant/                    # Shared constants
-    ├── logger/
-    │   └── logger.go                # Shared logger utilities
-    ├── model/
-    │   ├── request.go               # Common request models
-    │   └── response.go              # Common response models
-    ├── routes/
-    │   └── route.go                 # Route struct definition
-    └── util/
-        └── context.util.go          # Context utilities
+│   │   ├── http/
+│   │   │   ├── route.go                       # Route type definition
+│   │   │   ├── echo/
+│   │   │   │   ├── adapter.echo.go
+│   │   │   │   └── context.echo.go
+│   │   │   ├── gin/
+│   │   │   │   ├── adapter.gin.go
+│   │   │   │   └── context.gin.go
+│   │   │   ├── nethttp/                       # native net/http adapters
+│   │   │   │   ├── adapter.nethttp.go
+│   │   │   │   └── context.nethttp.go
+│   │   │   ├── fasthttp/                      # fasthttp adapters (github.com/valyala/fasthttp)
+│   │   │   │   ├── adapter.fasthttp.go
+│   │   │   │   └── context.fasthttp.go
+│   │   │   └── fiber/                         # Fiber adapters (github.com/gofiber/fiber)
+│   │   │       ├── adapter.fiber.go
+│   │   │       └── context.fiber.go
+│   │   ├── grpc/                              # gRPC transport (planned)
+│   │   │   └── .gitkeep
+│   │   └── websocket/                         # WebSocket transport (planned)
+│   │       └── .gitkeep
+│   └── proto/                                 # gRPC protobuf definitions (planned)
+│       └── .gitkeep
+└── scripts/                             # Utility scripts
+    ├── db.sh
+    ├── dev.sh
+    ├── setup.sh
+    ├── health-check.sh
+    ├── new-module.sh
+    ├── generate_mocks_from_source.sh
+    └── lint-deps-check.sh
 ```
 
 ---
@@ -348,6 +393,7 @@ go run . migration mongo up
 |---------|-------------|
 | `go run .` | Run SQL migrations (up) then start server |
 | `go run . server` | Start server only |
+| `go run . worker` | Start worker server for async task processing |
 | `go run . migration sql up` | Apply SQL migrations |
 | `go run . migration sql down` | Rollback SQL migrations |
 | `go run . migration mongo up` | Apply MongoDB migrations |
@@ -391,6 +437,72 @@ app:
     type: "jwt"  # jwt, session, basic, none
     session_cookie: "session_token"
     bcrypt_cost: 10
+
+  worker:
+    enabled: false
+    backend: "asynq"  # asynq, rabbitmq, redpanda, disable
+    asynq:
+      redis_url: "redis://localhost:6379"
+      concurrency: 10
+      max_retries: 3
+      default_timeout: "300s"
+    rabbitmq:
+      url: "amqp://guest:guest@localhost:5672/"
+      exchange: "tasks"
+      queue: "tasks_queue"
+      worker_count: 10
+      prefetch_count: 1
+    redpanda:
+      brokers:
+        - "localhost:9092"
+      topic: "tasks"
+      consumer_group: "workers"
+      partition_count: 3
+      replication_factor: 1
+      worker_count: 10
+
+  email:
+    enabled: false
+    provider: "noop"  # smtp, mailgun, noop
+    smtp:
+      host: "smtp.gmail.com"
+      port: 587
+      username: "your-email@gmail.com"
+      password: "your-app-password"
+      from_addr: "noreply@example.com"
+      from_name: "MyApp"
+    mailgun:
+      domain: "mg.example.com"
+      api_key: "key-xxxx"
+      from_addr: "noreply@example.com"
+      from_name: "MyApp"
+
+  storage:
+    enabled: false
+    local:
+      base_path: "./uploads"
+      max_file_size: 104857600  # 100MB in bytes
+      allow_public_access: false
+      public_url: "http://localhost:8080/files"
+    s3:
+      region: "us-east-1"
+      bucket: "my-bucket"
+      access_key_id: "${AWS_ACCESS_KEY_ID}"
+      secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+      endpoint: ""  # Leave empty for AWS, set for MinIO/Spaces
+      use_ssl: true
+      path_style: false  # Set to true for MinIO
+      presigned_url_ttl: 3600
+      server_side_encryption: false
+      storage_class: "STANDARD"
+    gcs:
+      project_id: "my-project"
+      bucket: "my-bucket"
+      credentials_file: ""  # Path to service account JSON
+      credentials_json: "${GCS_CREDENTIALS}"  # Or use environment variable
+      storage_class: "STANDARD"
+      location: "US"
+      metadata_cache: true
 ```
 
 ### Configuration Struct
@@ -407,6 +519,9 @@ type AppConfig struct {
     Redis    RedisConfig    `yaml:"redis"`
     JWT      JWTConfig      `yaml:"jwt"`
     Auth     AuthConfig     `yaml:"auth"`
+    Worker   WorkerConfig   `yaml:"worker"`
+    Email    EmailConfig    `yaml:"email"`
+    Storage  StorageConfig  `yaml:"storage"`
 }
 
 type ServerConfig struct {
@@ -427,6 +542,28 @@ type RedisConfig struct {
     MaxRetries   int    `yaml:"max_retries"`
     PoolSize     int    `yaml:"pool_size"`
     MinIdleConns int    `yaml:"min_idle_conns"`
+}
+
+type WorkerConfig struct {
+    Enabled  bool                 `yaml:"enabled"`
+    Backend  string               `yaml:"backend"` // asynq, rabbitmq, redpanda, disable
+    Asynq    AsynqWorkerConfig    `yaml:"asynq"`
+    RabbitMQ RabbitMQWorkerConfig `yaml:"rabbitmq"`
+    Redpanda RedpandaWorkerConfig `yaml:"redpanda"`
+}
+
+type EmailConfig struct {
+    Enabled  bool          `yaml:"enabled"`
+    Provider string        `yaml:"provider"` // smtp, mailgun, noop
+    SMTP     SMTPConfig    `yaml:"smtp"`
+    Mailgun  MailgunConfig `yaml:"mailgun"`
+}
+
+type StorageConfig struct {
+    Enabled bool               `yaml:"enabled"`
+    Local   LocalStorageConfig `yaml:"local"`
+    S3      S3StorageConfig    `yaml:"s3"`
+    GCS     GCSStorageConfig   `yaml:"gcs"`
 }
 ```
 
@@ -457,6 +594,30 @@ repository:
   authentication: postgres  # postgres | mongo | disable
   product: postgres         # postgres | mongo | disable
   user: postgres            # postgres | mongo | disable
+
+worker:
+  enabled: false
+  backend: disable  # asynq | rabbitmq | redpanda | disable
+  tasks:
+    email_notifications: false
+    data_export: false
+    report_generation: false
+    image_processing: false
+
+email:
+  enabled: false
+  provider: noop  # smtp | mailgun | noop
+
+storage:
+  enabled: false
+  backend: noop  # local | s3 | gcs | s3-compatible | noop
+  s3:
+    enable_encryption: false
+    storage_class: "STANDARD"
+    presigned_url_ttl: 3600
+  gcs:
+    storage_class: "STANDARD"
+    metadata_cache: true
 ```
 
 ### Feature Flag Options
@@ -468,6 +629,13 @@ repository:
 | `handler.*` | `v1`, `disable` | Handler version or disabled |
 | `service.*` | `v1`, `disable` | Service version or disabled |
 | `repository.*` | `postgres`, `mongo`, `disable` | Database backend |
+| `worker.enabled` | `true`, `false` | Enable/disable worker system |
+| `worker.backend` | `asynq`, `rabbitmq`, `redpanda`, `disable` | Worker queue backend |
+| `worker.tasks.*` | `true`, `false` | Enable/disable specific task types |
+| `email.enabled` | `true`, `false` | Enable/disable email service |
+| `email.provider` | `smtp`, `mailgun`, `noop` | Email provider selection |
+| `storage.enabled` | `true`, `false` | Enable/disable storage service |
+| `storage.backend` | `local`, `s3`, `gcs`, `s3-compatible`, `noop` | Storage backend selection |
 
 ### How It Works
 
@@ -547,8 +715,9 @@ type ProductHandler interface {
 
 #### User Module
 - **Status:** ✅ Complete  
-- **Features:** CRUD operations
+- **Features:** CRUD operations, worker tasks (welcome emails, data export, reports)
 - **Repository:** PostgreSQL
+- **Workers:** Send welcome email, password reset, data export, monthly emails
 
 #### Auth Module
 - **Status:** ✅ Complete (untested)
@@ -565,20 +734,43 @@ The shared kernel (`internal/shared/`) contains cross-cutting concerns that all 
 
 ```
 internal/shared/
+├── cache/
+│   ├── cache.go             # Cache interface definition
+│   ├── errors.go            # Cache error types
+│   ├── memory.go            # In-memory cache implementation
+│   └── mocks/               # Cache mocks for testing
 ├── context/
-│   └── context.go       # Framework-agnostic HTTP context interface
+│   ├── context.go           # Framework-agnostic HTTP context interface
+│   ├── context_key.go       # Context key definitions
+│   ├── util.go              # Context utilities
+│   └── mocks/               # Context mocks for testing
+├── email/
+│   ├── email.go             # EmailService interface & types
+│   ├── noop.go              # NoOp email service implementation
+│   └── mocks/               # Email mocks for testing
 ├── errors/
-│   ├── errors.go        # Domain error types
-│   ├── validation.go    # Validation error handling
-│   └── http.go          # HTTP status code mapping
+│   ├── errors.go            # Domain error types
+│   ├── validation.go        # Validation error handling
+│   └── http.go              # HTTP status code mapping
 ├── events/
-│   ├── event.go         # Event and EventBus interfaces
-│   ├── memory_bus.go    # In-memory EventBus implementation
-│   └── errors.go        # Event-related errors
+│   ├── event.go             # Event and EventBus interfaces
+│   ├── memory_bus.go        # In-memory EventBus implementation
+│   ├── errors.go            # Event-related errors
+│   └── mocks/               # Event bus mocks for testing
+├── model/
+│   ├── request.go           # Common request models
+│   └── response.go          # Common response models
+├── storage/
+│   ├── storage.go           # StorageService interface
+│   ├── errors.go            # Storage error types
+│   └── mocks/               # Storage mocks for testing
 ├── uow/
-│   └── unit_of_work.go  # Unit of Work interface
-└── validator/
-    └── validator.go     # Request validation utilities
+│   └── unit_of_work.go      # Unit of Work interface
+├── validator/
+│   └── validator.go         # Request validation utilities
+└── worker/
+    ├── worker.go            # TaskPayload, TaskHandler, Client, Server, Scheduler interfaces
+    └── mocks/               # Worker mocks for testing
 ```
 
 ### Shared Context (`sharedctx`)
@@ -976,7 +1168,7 @@ type ProductHandler interface {
 
 ## Microservices Readiness
 
-### Current Readiness Score: 8/10
+### Current Readiness Score: 9/10
 
 The architecture has been significantly improved to support future microservices migration.
 
@@ -988,9 +1180,10 @@ The architecture has been significantly improved to support future microservices
 | **Dependency Direction** | ✅ 9/10 | Complete | ACL pattern, dependency linter enforced |
 | **Database per Module** | 🟡 7/10 | Partial | Shared DB, but separate tables per module |
 | **API Contracts** | ✅ 8/10 | Good | Clean request/response DTOs per module |
-| **Configuration** | ✅ 8/10 | Good | Feature flags support module-level config |
-| **Event-Driven** | 🟡 7/10 | Partial | EventBus ready, not fully utilized |
-| **Testing** | 🔴 4/10 | Needs Work | Unit tests not implemented yet |
+| **Configuration** | ✅ 9/10 | Good | Feature flags support module-level config |
+| **Event-Driven** | ✅ 8/10 | Good | EventBus ready with worker integration |
+| **Async Processing** | ✅ 9/10 | Good | Workers with Asynq, RabbitMQ, Redpanda |
+| **Testing** | 🟡 6/10 | Partial | Mock generation scripts, needs more tests |
 
 ### Migration Path
 
@@ -1070,9 +1263,12 @@ When ready to migrate to microservices:
 ✅ **Module Isolation**: Each module is self-contained with its own domain  
 ✅ **ACL Pattern**: Cross-module communication via adapters (easy to swap for HTTP clients)  
 ✅ **Event Bus Interface**: In-memory implementation can be swapped for Kafka/RabbitMQ  
+✅ **Worker Infrastructure**: Asynq, RabbitMQ, Redpanda support for async processing  
 ✅ **Feature Flags**: Enable/disable modules independently  
 ✅ **Repository Pattern**: Database access abstracted behind interfaces  
 ✅ **Dependency Linter**: Enforces clean boundaries  
+✅ **Storage Abstraction**: S3, GCS, local filesystem support  
+✅ **Email Abstraction**: SMTP, Mailgun support with NoOp for testing  
 
 ### What Needs Work for Microservices
 
@@ -1095,17 +1291,19 @@ When ready to migrate to microservices:
 - [x] User CRUD implementation
 - [x] Authentication system: JWT, Basic Auth, Session-based (untested)
 - [x] Middleware integration (untested)
-- [x] **Shared Kernel** (`internal/shared/`) - Events, Errors, Context, UoW, Validator
+- [x] **Shared Kernel** (`internal/shared/`) - Events, Errors, Context, UoW, Validator, Email, Storage, Worker
 - [x] **Domain-per-Module Pattern** - Each module owns its domain types
 - [x] **Anti-Corruption Layer (ACL)** - Clean cross-module communication
 - [x] **Dependency Linter** (`cmd/lint-deps/`) - Enforces module isolation
 - [x] **Shared Context Interface** (`sharedctx.Context`) - Framework-agnostic handlers
 - [x] **Redis Integration** - Caching with Redis & in-memory fallback
-- [x] **Worker Support** - Asynq, RabbitMQ, and Redpanda integration
+- [x] **Worker Support** - Asynq, RabbitMQ, and Redpanda integration with cron scheduler
+- [x] **Email Services** - SMTP and Mailgun providers with NoOp for testing
+- [x] **Storage Services** - Local filesystem, AWS S3, S3-compatible (MinIO), and Google Cloud Storage
+- [x] **Additional HTTP Frameworks** - net/http, FastHTTP, and Fiber support
 
 ### Planned 📋
 - [ ] Unit Tests (Priority: High)
-- [ ] Storage support: S3-Compatible, GCS, MinIO, Local
 - [ ] gRPC & Protocol Buffers support
 - [ ] WebSocket integration
 - [ ] OpenTelemetry integration for distributed tracing
