@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package product.v1;
+
+option go_package = "github.com/kamil5b/go-ptse-monolith/internal/proto/product/v1;productv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// Product service for managing products
+service ProductService {
+  // Create a new product
+  rpc Create(CreateProductRequest) returns (CreateProductResponse);
+  
+  // Get a product by ID
+  rpc Get(GetProductRequest) returns (GetProductResponse);
+  
+  // List all products
+  rpc List(google.protobuf.Empty) returns (ListProductResponse);
+  
+  // Update an existing product
+  rpc Update(UpdateProductRequest) returns (UpdateProductResponse);
+  
+  // Delete a product
+  rpc Delete(DeleteProductRequest) returns (google.protobuf.Empty);
+}
+
+// Product represents the product entity
+message Product {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  google.protobuf.Timestamp created_at = 4;
+  string created_by = 5;
+  optional google.protobuf.Timestamp updated_at = 6;
+  optional string updated_by = 7;
+  optional google.protobuf.Timestamp deleted_at = 8;
+  optional string deleted_by = 9;
+}
+
+// CreateProductRequest represents the request to create a product
+message CreateProductRequest {
+  string name = 1;
+  string description = 2;
+}
+
+// CreateProductResponse returns the created product
+message CreateProductResponse {
+  Product product = 1;
+}
+
+// GetProductRequest represents the request to get a product
+message GetProductRequest {
+  string id = 1;
+}
+
+// GetProductResponse returns a product
+message GetProductResponse {
+  Product product = 1;
+}
+
+// ListProductResponse returns a list of products
+message ListProductResponse {
+  repeated Product products = 1;
+}
+
+// UpdateProductRequest represents the request to update a product
+message UpdateProductRequest {
+  string id = 1;
+  optional string name = 2;
+  optional string description = 3;
+}
+
+// UpdateProductResponse returns the updated product
+message UpdateProductResponse {
+  Product product = 1;
+}
+
+// DeleteProductRequest represents the request to delete a product
+message DeleteProductRequest {
+  string id = 1;
+}

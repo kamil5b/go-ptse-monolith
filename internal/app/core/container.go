@@ -29,6 +29,7 @@ import (
 
 	// Product module
 	productDomain "github.com/kamil5b/go-ptse-monolith/internal/modules/product/domain"
+	handlerGRPC "github.com/kamil5b/go-ptse-monolith/internal/modules/product/handler/grpc"
 	handlerUnimplemented "github.com/kamil5b/go-ptse-monolith/internal/modules/product/handler/noop"
 	handlerV1 "github.com/kamil5b/go-ptse-monolith/internal/modules/product/handler/v1"
 	repoMongo "github.com/kamil5b/go-ptse-monolith/internal/modules/product/repository/mongo"
@@ -78,9 +79,10 @@ type Container struct {
 	StorageService storage.StorageService
 
 	// Product module
-	ProductRepository productDomain.Repository
-	ProductService    productDomain.Service
-	ProductHandler    productDomain.Handler
+	ProductRepository  productDomain.Repository
+	ProductService     productDomain.Service
+	ProductHandler     productDomain.Handler
+	ProductGRPCHandler *handlerGRPC.GRPCHandler
 
 	// User module
 	UserRepository userDomain.Repository
@@ -105,18 +107,19 @@ func NewContainer(
 	mongoClient *mongo.Client,
 ) *Container {
 	var (
-		cacheInstance     cache.Cache
-		productRepository productDomain.Repository
-		productService    productDomain.Service
-		productHandler    productDomain.Handler
-		userRepository    userDomain.Repository
-		userService       userDomain.Service
-		userHandler       userDomain.Handler
-		authRepository    authDomain.Repository
-		authService       authDomain.Service
-		authHandler       authDomain.Handler
-		authMiddleware    *middleware.AuthMiddleware
-		unitOfWork        uow.UnitOfWork
+		cacheInstance      cache.Cache
+		productRepository  productDomain.Repository
+		productService     productDomain.Service
+		productHandler     productDomain.Handler
+		productGRPCHandler *handlerGRPC.GRPCHandler
+		userRepository     userDomain.Repository
+		userService        userDomain.Service
+		userHandler        userDomain.Handler
+		authRepository     authDomain.Repository
+		authService        authDomain.Service
+		authHandler        authDomain.Handler
+		authMiddleware     *middleware.AuthMiddleware
+		unitOfWork         uow.UnitOfWork
 	)
 
 	// Initialize cache (shared across all modules)
@@ -206,6 +209,9 @@ func NewContainer(
 	default:
 		productHandler = handlerUnimplemented.NewUnimplementedHandler()
 	}
+
+	// gRPC handler
+	productGRPCHandler = handlerGRPC.NewGRPCHandler(productService)
 
 	// user repo
 	switch featureFlag.Repository.User {
@@ -388,21 +394,22 @@ func NewContainer(
 	}
 
 	return &Container{
-		Cache:             cacheInstance,
-		EventBus:          eventBus,
-		EmailClient:       emailService,
-		StorageService:    storageService,
-		ProductRepository: productRepository,
-		ProductService:    productService,
-		ProductHandler:    productHandler,
-		UserRepository:    userRepository,
-		UserService:       userService,
-		UserHandler:       userHandler,
-		AuthRepository:    authRepository,
-		AuthService:       authService,
-		AuthHandler:       authHandler,
-		AuthMiddleware:    authMiddleware,
-		WorkerClient:      workerClient,
-		WorkerServer:      workerServer,
+		Cache:              cacheInstance,
+		EventBus:           eventBus,
+		EmailClient:        emailService,
+		StorageService:     storageService,
+		ProductRepository:  productRepository,
+		ProductService:     productService,
+		ProductHandler:     productHandler,
+		ProductGRPCHandler: productGRPCHandler,
+		UserRepository:     userRepository,
+		UserService:        userService,
+		UserHandler:        userHandler,
+		AuthRepository:     authRepository,
+		AuthService:        authService,
+		AuthHandler:        authHandler,
+		AuthMiddleware:     authMiddleware,
+		WorkerClient:       workerClient,
+		WorkerServer:       workerServer,
 	}
 }
