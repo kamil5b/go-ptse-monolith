@@ -6,8 +6,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"go-modular-monolith/internal/modules/auth/domain"
 	"time"
+
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/auth/domain"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"

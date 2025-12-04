@@ -6,10 +6,11 @@ package mocks
 
 import (
 	context "context"
-	storage "go-modular-monolith/internal/shared/storage"
 	io "io"
 	reflect "reflect"
 	time "time"
+
+	storage "github.com/kamil5b/go-ptse-monolith/internal/shared/storage"
 
 	gomock "github.com/golang/mock/gomock"
 )

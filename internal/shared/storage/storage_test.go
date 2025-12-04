@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go-modular-monolith/internal/shared/storage"
-	"go-modular-monolith/internal/shared/storage/mocks"
+	"github.com/kamil5b/go-ptse-monolith/internal/shared/storage"
+	"github.com/kamil5b/go-ptse-monolith/internal/shared/storage/mocks"
 )
 
 func TestStorageObjectCreation(t *testing.T) {

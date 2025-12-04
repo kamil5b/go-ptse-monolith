@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	sharedworker "go-modular-monolith/internal/shared/worker"
+	sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 )
 
 // CronExpression is an alias to the shared type

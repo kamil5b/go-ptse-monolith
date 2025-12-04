@@ -5,8 +5,9 @@
 package mocks
 
 import (
-	worker "go-modular-monolith/internal/shared/worker"
 	reflect "reflect"
+
+	worker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 
 	gomock "github.com/golang/mock/gomock"
 )

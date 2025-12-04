@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	sharedworker "go-modular-monolith/internal/shared/worker"
+	sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 
 	"github.com/segmentio/kafka-go"
 )

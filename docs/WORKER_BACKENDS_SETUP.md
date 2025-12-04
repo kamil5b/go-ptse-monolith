@@ -30,9 +30,9 @@ import (
 	"context"
 	"time"
 
-	sharedworker "go-modular-monolith/internal/shared/worker"
-	infraworker "go-modular-monolith/internal/infrastructure/worker"
-	"go-modular-monolith/internal/infrastructure/worker/redpanda"
+	sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
+	infraworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker"
+	"github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker/redpanda"
 )
 
 func setupRedpandaWorker(cfg *Config) error {
@@ -101,9 +101,9 @@ import (
 	"context"
 	"time"
 
-	sharedworker "go-modular-monolith/internal/shared/worker"
-	infraworker "go-modular-monolith/internal/infrastructure/worker"
-	"go-modular-monolith/internal/infrastructure/worker/rabbitmq"
+	sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
+	infraworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker"
+	"github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker/rabbitmq"
 )
 
 func setupRabbitMQWorker(cfg *Config) error {
@@ -178,9 +178,9 @@ import (
 	"context"
 	"time"
 
-	sharedworker "go-modular-monolith/internal/shared/worker"
-	infraworker "go-modular-monolith/internal/infrastructure/worker"
-	"go-modular-monolith/internal/infrastructure/worker/asynq"
+	sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
+	infraworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker"
+	"github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker/asynq"
 )
 
 func setupAsynqWorker(cfg *Config) error {
@@ -245,9 +245,9 @@ import (
 	"fmt"
 	"log"
 
-	"go-modular-monolith/internal/infrastructure/email/smtp"
-	sharedworker "go-modular-monolith/internal/shared/worker"
-	userdomain "go-modular-monolith/internal/modules/user/domain"
+	"github.com/kamil5b/go-ptse-monolith/internal/infrastructure/email/smtp"
+	sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
+	userdomain "github.com/kamil5b/go-ptse-monolith/internal/modules/user/domain"
 )
 
 func handleMonthlyEmail(
@@ -334,7 +334,7 @@ server, _ := rabbitmq.NewRabbitMQServer(amqpURL, "exchange", "queue", 10)
 All backends support the same cron expression:
 
 ```go
-import sharedworker "go-modular-monolith/internal/shared/worker"
+import sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 
 // 15th at 9:00 AM
 sharedworker.Monthly(15, 9, 0)

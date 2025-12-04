@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	sharederrors "go-modular-monolith/internal/shared/errors"
+	sharederrors "github.com/kamil5b/go-ptse-monolith/internal/shared/errors"
 )
 
 func TestGetValidator(t *testing.T) {

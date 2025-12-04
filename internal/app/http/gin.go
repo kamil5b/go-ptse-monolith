@@ -1,10 +1,10 @@
 package http
 
 import (
-	"go-modular-monolith/internal/app/core"
-	sharedctx "go-modular-monolith/internal/shared/context"
+	"github.com/kamil5b/go-ptse-monolith/internal/app/core"
+	sharedctx "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 
-	transportGin "go-modular-monolith/internal/transports/http/gin"
+	transportGin "github.com/kamil5b/go-ptse-monolith/internal/transports/http/gin"
 
 	"github.com/gin-gonic/gin"
 )

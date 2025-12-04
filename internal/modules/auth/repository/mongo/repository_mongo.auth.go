@@ -2,8 +2,9 @@ package mongo
 
 import (
 	"context"
-	"go-modular-monolith/internal/modules/auth/domain"
 	"time"
+
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/auth/domain"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"

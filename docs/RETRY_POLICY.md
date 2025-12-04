@@ -21,7 +21,7 @@ type RetryPolicy struct {
 ### Default Policy
 
 ```go
-import infraworker "go-modular-monolith/internal/infrastructure/worker"
+import infraworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker"
 
 policy := infraworker.DefaultRetryPolicy()
 // MaxRetries: 3
@@ -38,7 +38,7 @@ Backoff schedule: 1s → 2s → 4s → DLQ
 ### 1. Quick Retries (Network/Temporary Errors)
 
 ```go
-import infraworker "go-modular-monolith/internal/infrastructure/worker"
+import infraworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker"
 
 // For tasks that might have temporary network issues
 infraworker.RetryPolicy{
@@ -160,9 +160,9 @@ RetryableErrors: []string{
 
 ```go
 import (
-	sharedworker "go-modular-monolith/internal/shared/worker"
-	infraworker "go-modular-monolith/internal/infrastructure/worker"
-	"go-modular-monolith/internal/infrastructure/worker/redpanda"
+	sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
+	infraworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker"
+	"github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker/redpanda"
 )
 
 // Set up retry policy
@@ -192,7 +192,7 @@ server.RegisterHandler("send_email", func(ctx context.Context, payload sharedwor
 Track retry metrics:
 
 ```go
-import infraworker "go-modular-monolith/internal/infrastructure/worker"
+import infraworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker"
 
 metrics := infraworker.NewRetryMetrics("send_email")
 metrics.TotalAttempts = 3
@@ -216,7 +216,7 @@ log.Println(metrics.String())
 ## Example Task Implementation
 
 ```go
-import sharedworker "go-modular-monolith/internal/shared/worker"
+import sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 
 server.RegisterHandler("process_payment", func(ctx context.Context, payload sharedworker.TaskPayload) error {
 	userID, ok := payload["user_id"].(string)

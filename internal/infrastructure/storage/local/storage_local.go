@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"go-modular-monolith/internal/shared/storage"
+	"github.com/kamil5b/go-ptse-monolith/internal/shared/storage"
 )
 
 // LocalStorageConfig configures the local filesystem storage

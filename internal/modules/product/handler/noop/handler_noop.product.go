@@ -1,8 +1,9 @@
 package noop
 
 import (
-	sharedctx "go-modular-monolith/internal/shared/context"
 	"net/http"
+
+	sharedctx "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 )
 
 type Handler struct{}

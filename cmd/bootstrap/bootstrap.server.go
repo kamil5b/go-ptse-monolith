@@ -4,11 +4,11 @@ import (
 	"errors"
 	"net/http"
 
-	"go-modular-monolith/internal/app/core"
-	appHttp "go-modular-monolith/internal/app/http"
-	infraMongo "go-modular-monolith/internal/infrastructure/db/mongo"
-	infraSQL "go-modular-monolith/internal/infrastructure/db/sql"
-	logger "go-modular-monolith/internal/logger"
+	"github.com/kamil5b/go-ptse-monolith/internal/app/core"
+	appHttp "github.com/kamil5b/go-ptse-monolith/internal/app/http"
+	infraMongo "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/db/mongo"
+	infraSQL "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/db/sql"
+	logger "github.com/kamil5b/go-ptse-monolith/internal/logger"
 
 	"github.com/valyala/fasthttp"
 )

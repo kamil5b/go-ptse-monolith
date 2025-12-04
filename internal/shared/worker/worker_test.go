@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go-modular-monolith/internal/shared/worker"
-	"go-modular-monolith/internal/shared/worker/mocks"
+	"github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
+	"github.com/kamil5b/go-ptse-monolith/internal/shared/worker/mocks"
 )
 
 func TestTaskPayload(t *testing.T) {

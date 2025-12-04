@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	sharedworker "go-modular-monolith/internal/shared/worker"
+	sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 )
 
 // NoOpClient is a no-op implementation of the Client interface

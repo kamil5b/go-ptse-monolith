@@ -3,7 +3,8 @@ package noop
 import (
 	"context"
 	"errors"
-	"go-modular-monolith/internal/modules/auth/domain"
+
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/auth/domain"
 )
 
 var ErrNotImplemented = errors.New("auth service not implemented")

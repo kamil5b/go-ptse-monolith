@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 
-	sharederrors "go-modular-monolith/internal/shared/errors"
+	sharederrors "github.com/kamil5b/go-ptse-monolith/internal/shared/errors"
 )
 
 var (

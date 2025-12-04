@@ -6,8 +6,9 @@ package mocks
 
 import (
 	context "context"
-	events "go-modular-monolith/internal/shared/events"
 	reflect "reflect"
+
+	events "github.com/kamil5b/go-ptse-monolith/internal/shared/events"
 
 	gomock "github.com/golang/mock/gomock"
 )

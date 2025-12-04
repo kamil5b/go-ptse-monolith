@@ -2,7 +2,8 @@ package unitofwork
 
 import (
 	"context"
-	sharedCtx "go-modular-monolith/internal/shared/context"
+
+	sharedCtx "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 
 	"github.com/jmoiron/sqlx"
 )

@@ -2,9 +2,10 @@ package sql
 
 import (
 	"context"
-	"go-modular-monolith/internal/modules/product/domain"
-	sharedCtx "go-modular-monolith/internal/shared/context"
 	"time"
+
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/product/domain"
+	sharedCtx "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"

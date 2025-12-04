@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	sharedworker "go-modular-monolith/internal/shared/worker"
+	sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 
 	"github.com/hibiken/asynq"
 )

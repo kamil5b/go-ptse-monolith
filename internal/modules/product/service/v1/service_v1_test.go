@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go-modular-monolith/internal/modules/product/domain"
-	"go-modular-monolith/internal/modules/product/domain/mocks"
-	cachemocks "go-modular-monolith/internal/shared/cache/mocks"
-	eventmocks "go-modular-monolith/internal/shared/events/mocks"
-	uowmocks "go-modular-monolith/internal/shared/uow/mocks"
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/product/domain"
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/product/domain/mocks"
+	cachemocks "github.com/kamil5b/go-ptse-monolith/internal/shared/cache/mocks"
+	eventmocks "github.com/kamil5b/go-ptse-monolith/internal/shared/events/mocks"
+	uowmocks "github.com/kamil5b/go-ptse-monolith/internal/shared/uow/mocks"
 )
 
 // contextKey is a custom context key type to avoid collisions with built-in string type

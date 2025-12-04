@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"testing"
 
-	domain "go-modular-monolith/internal/modules/product/domain"
-	mockdomain "go-modular-monolith/internal/modules/product/domain/mocks"
-	ctxmocks "go-modular-monolith/internal/shared/context/mocks"
+	domain "github.com/kamil5b/go-ptse-monolith/internal/modules/product/domain"
+	mockdomain "github.com/kamil5b/go-ptse-monolith/internal/modules/product/domain/mocks"
+	ctxmocks "github.com/kamil5b/go-ptse-monolith/internal/shared/context/mocks"
 
 	gomock "github.com/golang/mock/gomock"
 )

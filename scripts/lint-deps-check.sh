@@ -60,7 +60,7 @@ for module in $MODULES; do
     ((CHECKED_FILES++))
     
     # Extract imports from the file
-    imports=$(grep -E "^\s*\"go-modular-monolith/internal/modules" "$file" || true)
+    imports=$(grep -E "^\s*\"github.com/kamil5b/go-ptse-monolith/internal/modules" "$file" || true)
     
     if [ -z "$imports" ]; then
       [ $VERBOSE = true ] && echo "  ✅ $file"
@@ -70,7 +70,7 @@ for module in $MODULES; do
     # Check each import
     while IFS= read -r import_line; do
       # Extract module name from import
-      imported_module=$(echo "$import_line" | grep -oE 'go-modular-monolith/internal/modules/[^/]+' | sed 's|.*modules/||')
+      imported_module=$(echo "$import_line" | grep -oE 'github.com/kamil5b/go-ptse-monolith/internal/modules/[^/]+' | sed 's|.*modules/||')
       
       # Skip if import is from same module or from ACL (ACL is allowed to import other modules)
       if [ "$imported_module" = "$module" ] || [[ "$file" == *"/acl/"* ]]; then
@@ -108,7 +108,7 @@ for module in $MODULES; do
     fi
     
     # Check for imports NOT from shared kernel
-    bad_imports=$(grep -E "^\s*\"go-modular-monolith/internal/(app|infrastructure)" "$file" || true)
+    bad_imports=$(grep -E "^\s*\"github.com/kamil5b/go-ptse-monolith/internal/(app|infrastructure)" "$file" || true)
     
     if [ -n "$bad_imports" ]; then
       if [ $VIOLATIONS -eq 0 ]; then

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"go-modular-monolith/internal/modules/product/domain"
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/product/domain"
 )
 
 type UnimplementedService struct{}

@@ -1,9 +1,10 @@
 package v1
 
 import (
-	"go-modular-monolith/internal/modules/auth/domain"
-	sharedctx "go-modular-monolith/internal/shared/context"
 	"net/http"
+
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/auth/domain"
+	sharedctx "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 )
 
 type Handler struct {

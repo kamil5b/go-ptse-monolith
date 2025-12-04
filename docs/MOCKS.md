@@ -12,7 +12,7 @@ Quick steps
 
 2. Create a spec file (for example `mocks.spec`) with lines like:
 
-   github.com/kamil5b/go-modular-monolith/internal/modules/product/domain ProductRepository internal/modules/product/repository/mock_product_repo.go mocks
+   github.com/kamil5b/github.com/kamil5b/go-ptse-monolith/internal/modules/product/domain ProductRepository internal/modules/product/repository/mock_product_repo.go mocks
 
 3. Run the generator:
 

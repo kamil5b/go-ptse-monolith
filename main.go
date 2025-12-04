@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"go-modular-monolith/cmd/bootstrap"
 	"log"
 	"os"
+
+	"github.com/kamil5b/go-ptse-monolith/cmd/bootstrap"
 )
 
 func main() {

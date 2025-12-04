@@ -37,7 +37,7 @@ The Go Modular Monolith project includes a comprehensive suite of developer expe
 **Example:**
 ```bash
 git clone <repo-url>
-cd go-modular-monolith
+cd github.com/kamil5b/go-ptse-monolith
 ./scripts/setup.sh
 ```
 

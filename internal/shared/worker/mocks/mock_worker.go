@@ -6,9 +6,10 @@ package mocks
 
 import (
 	context "context"
-	worker "go-modular-monolith/internal/shared/worker"
 	reflect "reflect"
 	time "time"
+
+	worker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 
 	gomock "github.com/golang/mock/gomock"
 )

@@ -60,8 +60,8 @@ import (
     "github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/require"
     
-    "go-modular-monolith/internal/modules/product/domain"
-    "go-modular-monolith/internal/modules/product/domain/mocks"
+    "github.com/kamil5b/go-ptse-monolith/internal/modules/product/domain"
+    "github.com/kamil5b/go-ptse-monolith/internal/modules/product/domain/mocks"
 )
 
 // Context key type (avoid collisions with built-in types)

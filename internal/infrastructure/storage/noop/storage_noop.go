@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"go-modular-monolith/internal/shared/storage"
+	"github.com/kamil5b/go-ptse-monolith/internal/shared/storage"
 )
 
 // NoOpStorageService is a no-op implementation of StorageService for testing and development

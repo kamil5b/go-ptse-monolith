@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"go-modular-monolith/internal/modules/user/domain"
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/user/domain"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Successfully implemented comprehensive worker support for the go-modular-monolith project with support for three major backends:
+Successfully implemented comprehensive worker support for the github.com/kamil5b/go-ptse-monolith project with support for three major backends:
 
 1. **Asynq** - Redis-backed task queue with built-in retry logic and scheduling
 2. **RabbitMQ** - Message broker with advanced routing and persistent queues
@@ -295,7 +295,7 @@ workerServer.RegisterHandler(
 
 ## Conclusion
 
-Complete worker support infrastructure is now integrated into the go-modular-monolith. Developers can:
+Complete worker support infrastructure is now integrated into the github.com/kamil5b/go-ptse-monolith. Developers can:
 
 1. **Choose a backend** via feature flags and configuration
 2. **Define tasks** in module-specific worker packages

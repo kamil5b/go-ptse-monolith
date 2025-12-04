@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"go-modular-monolith/internal/modules/product/domain"
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/product/domain"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"

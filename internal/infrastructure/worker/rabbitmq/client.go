@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	sharedworker "go-modular-monolith/internal/shared/worker"
+	sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )

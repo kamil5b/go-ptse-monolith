@@ -6,9 +6,10 @@ package mocks
 
 import (
 	context "context"
-	domain "go-modular-monolith/internal/modules/product/domain"
-	context0 "go-modular-monolith/internal/shared/context"
 	reflect "reflect"
+
+	domain "github.com/kamil5b/go-ptse-monolith/internal/modules/product/domain"
+	context0 "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 
 	gomock "github.com/golang/mock/gomock"
 )

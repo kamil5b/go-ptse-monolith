@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"go-modular-monolith/internal/modules/auth/domain"
-	userdomain "go-modular-monolith/internal/modules/user/domain"
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/auth/domain"
+	userdomain "github.com/kamil5b/go-ptse-monolith/internal/modules/user/domain"
 )
 
 // UserCreatorAdapter implements domain.UserCreator by adapting to the user module.

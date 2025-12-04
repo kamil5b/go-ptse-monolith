@@ -1,7 +1,7 @@
 package echo
 
 import (
-	transportHTTP "go-modular-monolith/internal/transports/http"
+	transportHTTP "github.com/kamil5b/go-ptse-monolith/internal/transports/http"
 
 	"github.com/labstack/echo/v4"
 )

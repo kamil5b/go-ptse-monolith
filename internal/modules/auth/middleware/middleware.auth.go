@@ -2,10 +2,11 @@ package middleware
 
 import (
 	"encoding/base64"
-	"go-modular-monolith/internal/modules/auth/domain"
-	sharedctx "go-modular-monolith/internal/shared/context"
 	"net/http"
 	"strings"
+
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/auth/domain"
+	sharedctx "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 )
 
 type AuthType string

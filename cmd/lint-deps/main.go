@@ -31,8 +31,8 @@ func main() {
 
 	// Allowed shared imports
 	allowedShared := []string{
-		"go-modular-monolith/internal/shared",
-		"go-modular-monolith/pkg",
+		"github.com/kamil5b/go-ptse-monolith/internal/shared",
+		"github.com/kamil5b/go-ptse-monolith/pkg",
 	}
 
 	violations := []string{}
@@ -66,7 +66,7 @@ func main() {
 				importPath := strings.Trim(imp.Path.Value, `"`)
 
 				// Skip standard library and external imports
-				if !strings.Contains(importPath, "go-modular-monolith") {
+				if !strings.Contains(importPath, "github.com/kamil5b/go-ptse-monolith") {
 					continue
 				}
 
@@ -171,7 +171,7 @@ func main() {
 		isBootstrapFile := strings.Contains(relPath, "cmd/bootstrap/")
 		for _, imp := range f.Imports {
 			importPath := strings.Trim(imp.Path.Value, `"`)
-			if !strings.Contains(importPath, "go-modular-monolith") {
+			if !strings.Contains(importPath, "github.com/kamil5b/go-ptse-monolith") {
 				continue
 			}
 			// Rule: /app/** can import from anywhere except /cmd/bootstrap
@@ -224,7 +224,7 @@ func main() {
 				layer := parts[1]
 				for _, imp := range f.Imports {
 					importPath := strings.Trim(imp.Path.Value, `"`)
-					if !strings.Contains(importPath, "go-modular-monolith") {
+					if !strings.Contains(importPath, "github.com/kamil5b/go-ptse-monolith") {
 						continue
 					}
 					// Domain layer

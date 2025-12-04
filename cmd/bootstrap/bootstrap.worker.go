@@ -9,12 +9,12 @@ import (
 	"syscall"
 	"time"
 
-	"go-modular-monolith/internal/app/core"
-	"go-modular-monolith/internal/app/worker"
-	infraMongo "go-modular-monolith/internal/infrastructure/db/mongo"
-	infraSQL "go-modular-monolith/internal/infrastructure/db/sql"
-	logger "go-modular-monolith/internal/logger"
-	userworker "go-modular-monolith/internal/modules/user/worker"
+	"github.com/kamil5b/go-ptse-monolith/internal/app/core"
+	"github.com/kamil5b/go-ptse-monolith/internal/app/worker"
+	infraMongo "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/db/mongo"
+	infraSQL "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/db/sql"
+	logger "github.com/kamil5b/go-ptse-monolith/internal/logger"
+	userworker "github.com/kamil5b/go-ptse-monolith/internal/modules/user/worker"
 )
 
 // RunWorker initializes and starts the worker server

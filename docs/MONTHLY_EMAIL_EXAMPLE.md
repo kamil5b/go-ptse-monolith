@@ -24,11 +24,11 @@ import (
 	"log"
 	"time"
 	
-	"go-modular-monolith/internal/infrastructure/email/smtp"
-	sharedworker "go-modular-monolith/internal/shared/worker"
-	infraworker "go-modular-monolith/internal/infrastructure/worker"
-	"go-modular-monolith/internal/infrastructure/worker/redpanda"
-	userdomain "go-modular-monolith/internal/modules/user/domain"
+	"github.com/kamil5b/go-ptse-monolith/internal/infrastructure/email/smtp"
+	sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
+	infraworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker"
+	"github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker/redpanda"
+	userdomain "github.com/kamil5b/go-ptse-monolith/internal/modules/user/domain"
 )
 
 // RunWorkerWithScheduler initializes worker and cron scheduler
@@ -140,7 +140,7 @@ func newMonthlyEmailHandler(
 ### Step 2: Cron Expression Details
 
 ```go
-import sharedworker "go-modular-monolith/internal/shared/worker"
+import sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 
 // Monthly on the 15th at 9:00 AM
 sharedworker.Monthly(15, 9, 0)
@@ -243,9 +243,9 @@ Create a test that verifies the job is scheduled:
 
 ```go
 import (
-	sharedworker "go-modular-monolith/internal/shared/worker"
-	infraworker "go-modular-monolith/internal/infrastructure/worker"
-	"go-modular-monolith/internal/infrastructure/worker/redpanda"
+	sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
+	infraworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker"
+	"github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker/redpanda"
 )
 
 func TestMonthlyEmailScheduling(t *testing.T) {

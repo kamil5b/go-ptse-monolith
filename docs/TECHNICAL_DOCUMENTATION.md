@@ -1,4 +1,4 @@
-# Go Modular Monolith - Technical Documentation
+# Go-PSTE-Monolith - Technical Documentation
 
 > **Version:** 2.0.0  
 > **Last Updated:** December 2, 2025  
@@ -33,7 +33,7 @@
 
 ## Overview
 
-Go Modular Monolith is a production-ready, modular monolithic application built with Go. It implements clean architecture principles with pluggable components, allowing teams to:
+Go-PSTE-Monolith is a production-ready, modular monolithic application built with Go. It implements clean architecture principles with pluggable components, allowing teams to:
 
 - **Switch HTTP frameworks** (Echo/Gin) via configuration
 - **Switch HTTP frameworks** (Echo, Gin, net/http, fasthttp, Fiber) via configuration
@@ -157,7 +157,7 @@ Routes → Handlers → Services → Repositories → Database
 ## Project Structure
 
 ```
-go-modular-monolith/
+github.com/kamil5b/go-ptse-monolith/
 ├── main.go                          # Application entry point
 ├── go.mod                           # Go module definition
 ├── config/
@@ -315,8 +315,8 @@ go-modular-monolith/
 
 ```bash
 # Clone the repository
-git clone https://github.com/kamil5b/go-modular-monolith.git
-cd go-modular-monolith
+git clone https://github.com/kamil5b/go-ptse-monolith.git
+cd go-ptse-monolith
 
 # Install dependencies
 go mod tidy
@@ -838,7 +838,7 @@ type UserCreator interface {
 package acl
 
 import (
-    userdomain "go-modular-monolith/internal/modules/user/domain"
+    userdomain "github.com/kamil5b/go-ptse-monolith/internal/modules/user/domain"
 )
 
 // UserCreatorAdapter adapts the user repository to auth's UserCreator interface
@@ -869,7 +869,7 @@ func (a *UserCreatorAdapter) CreateUser(ctx context.Context, name, email string)
 ```go
 // internal/app/core/container.go
 import (
-    authacl "go-modular-monolith/internal/modules/auth/acl"
+    authacl "github.com/kamil5b/go-ptse-monolith/internal/modules/auth/acl"
 )
 
 // Create ACL adapter
@@ -932,7 +932,7 @@ go run cmd/lint-deps/main.go
 ✅ Checking dependencies...
 
 ❌ Violation in internal/modules/auth/service/v1/service_v1.auth.go:
-   - Imports "go-modular-monolith/internal/modules/user/repository/sql"
+   - Imports "github.com/kamil5b/go-ptse-monolith/internal/modules/user/repository/sql"
    - Module "auth" should not import from module "user"
 
 Fix: Use an ACL adapter or events for cross-module communication.
@@ -961,7 +961,7 @@ The linter automatically:
 All modules use `sharedctx.Context` from the shared kernel for framework-agnostic HTTP handling:
 
 ```go
-import sharedctx "go-modular-monolith/internal/shared/context"
+import sharedctx "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 
 type ProductHandler interface {
     Create(c sharedctx.Context) error
@@ -1332,7 +1332,7 @@ package worker
 import (
     "context"
     "encoding/json"
-    sharedworker "go-modular-monolith/internal/shared/worker"
+    sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 )
 
 const (
@@ -1373,8 +1373,8 @@ import (
     "context"
     "encoding/json"
     "fmt"
-    sharedworker "go-modular-monolith/internal/shared/worker"
-    userdomain "go-modular-monolith/internal/modules/user/domain"
+    sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
+    userdomain "github.com/kamil5b/go-ptse-monolith/internal/modules/user/domain"
 )
 
 type UserWorkerHandler struct {
@@ -1450,8 +1450,8 @@ import (
     "fmt"
     
     "github.com/hibiken/asynq"
-    sharedworker "go-modular-monolith/internal/shared/worker"
-    "go-modular-monolith/internal/shared/context/logger"
+    sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
+    "github.com/kamil5b/go-ptse-monolith/internal/shared/context/logger"
 )
 
 type AsynqServer struct {
@@ -1515,7 +1515,7 @@ import (
     "time"
     
     "github.com/hibiken/asynq"
-    sharedworker "go-modular-monolith/internal/shared/worker"
+    sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 )
 
 type AsynqClient struct {
@@ -1582,7 +1582,7 @@ import (
     "time"
     
     amqp "github.com/rabbitmq/amqp091-go"
-    sharedworker "go-modular-monolith/internal/shared/worker"
+    sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 )
 
 type RabbitMQClient struct {
@@ -1678,7 +1678,7 @@ import (
     "time"
     
     "github.com/segmentio/kafka-go"
-    sharedworker "go-modular-monolith/internal/shared/worker"
+    sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 )
 
 type RedpandaClient struct {
@@ -1741,9 +1741,9 @@ package servicev1
 
 import (
     "context"
-    sharedworker "go-modular-monolith/internal/shared/worker"
-    userdomain "go-modular-monolith/internal/modules/user/domain"
-    userworker "go-modular-monolith/internal/modules/user/worker"
+    sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
+    userdomain "github.com/kamil5b/go-ptse-monolith/internal/modules/user/domain"
+    userworker "github.com/kamil5b/go-ptse-monolith/internal/modules/user/worker"
 )
 
 type UserService struct {
@@ -1804,12 +1804,12 @@ func (s *UserService) Create(ctx context.Context, req *userdomain.CreateUserRequ
 package core
 
 import (
-    sharedworker "go-modular-monolith/internal/shared/worker"
-    asynqworker "go-modular-monolith/internal/infrastructure/worker/asynq"
-    rabbitmqworker "go-modular-monolith/internal/infrastructure/worker/rabbitmq"
-    redpandaworker "go-modular-monolith/internal/infrastructure/worker/redpanda"
-    infraworker "go-modular-monolith/internal/infrastructure/worker"
-    userworker "go-modular-monolith/internal/modules/user/worker"
+    sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
+    asynqworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker/asynq"
+    rabbitmqworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker/rabbitmq"
+    redpandaworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker/redpanda"
+    infraworker "github.com/kamil5b/go-ptse-monolith/internal/infrastructure/worker"
+    userworker "github.com/kamil5b/go-ptse-monolith/internal/modules/user/worker"
 )
 
 func buildWorkerClient(config Config, featureFlags FeatureFlags) (sharedworker.Client, error) {
@@ -2196,8 +2196,8 @@ package worker
 
 import (
     "context"
-    "go-modular-monolith/internal/shared/email"
-    sharedworker "go-modular-monolith/internal/shared/worker"
+    "github.com/kamil5b/go-ptse-monolith/internal/shared/email"
+    sharedworker "github.com/kamil5b/go-ptse-monolith/internal/shared/worker"
 )
 
 type UserWorkerHandler struct {
@@ -2465,7 +2465,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-	"go-modular-monolith/internal/shared/storage"
+	"github.com/kamil5b/go-ptse-monolith/internal/shared/storage"
 )
 
 type LocalStorageConfig struct {
@@ -2590,7 +2590,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"go-modular-monolith/internal/shared/storage"
+	"github.com/kamil5b/go-ptse-monolith/internal/shared/storage"
 )
 
 type S3StorageConfig struct {
@@ -2768,7 +2768,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/option"
-	storagepkg "go-modular-monolith/internal/shared/storage"
+	storagepkg "github.com/kamil5b/go-ptse-monolith/internal/shared/storage"
 )
 
 type GCSStorageConfig struct {
@@ -2969,8 +2969,8 @@ Storage services can be injected into handlers and services for file upload/down
 package handlerv1
 
 import (
-	"go-modular-monolith/internal/shared/storage"
-	sharedctx "go-modular-monolith/internal/shared/context"
+	"github.com/kamil5b/go-ptse-monolith/internal/shared/storage"
+	sharedctx "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 )
 
 type ProductHandler struct {
@@ -3035,10 +3035,10 @@ func (h *ProductHandler) GetProductImage(c sharedctx.Context) error {
 package core
 
 import (
-	"go-modular-monolith/internal/infrastructure/storage/local"
-	"go-modular-monolith/internal/infrastructure/storage/s3"
-	"go-modular-monolith/internal/infrastructure/storage/gcs"
-	"go-modular-monolith/internal/shared/storage"
+	"github.com/kamil5b/go-ptse-monolith/internal/infrastructure/storage/local"
+	"github.com/kamil5b/go-ptse-monolith/internal/infrastructure/storage/s3"
+	"github.com/kamil5b/go-ptse-monolith/internal/infrastructure/storage/gcs"
+	"github.com/kamil5b/go-ptse-monolith/internal/shared/storage"
 )
 
 func buildStorageService(config Config, featureFlags FeatureFlags) (storage.StorageService, error) {

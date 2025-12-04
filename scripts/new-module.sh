@@ -80,7 +80,7 @@ EOF
 cat > "$MODULE_PATH/domain/interfaces.go" << 'EOF'
 package domain
 
-import sharedctx "go-modular-monolith/internal/shared/context"
+import sharedctx "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 
 // TODO: Define your module's interfaces here
 
@@ -158,8 +158,8 @@ package v1
 
 import (
 	"context"
-	"go-modular-monolith/internal/modules/MODULEPLACEHOLDER/domain"
-	sharedctx "go-modular-monolith/internal/shared/context"
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/MODULEPLACEHOLDER/domain"
+	sharedctx "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 )
 
 type Handler struct {
@@ -190,7 +190,7 @@ sed -i '' "s/MODULEPLACEHOLDER/$MODULE_NAME/g" "$MODULE_PATH/handler/v1/handler_
 cat > "$MODULE_PATH/handler/noop/handler_noop.$MODULE_NAME.go" << 'EOF'
 package noop
 
-import sharedctx "go-modular-monolith/internal/shared/context"
+import sharedctx "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 
 type NoOpHandler struct{}
 
@@ -212,7 +212,7 @@ package v1
 
 import (
 	"context"
-	"go-modular-monolith/internal/modules/MODULEPLACEHOLDER/domain"
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/MODULEPLACEHOLDER/domain"
 )
 
 type Service struct {
@@ -254,7 +254,7 @@ package sql
 import (
 	"context"
 	"database/sql"
-	"go-modular-monolith/internal/modules/MODULEPLACEHOLDER/domain"
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/MODULEPLACEHOLDER/domain"
 )
 
 type SQLRepository struct {
@@ -277,7 +277,7 @@ package mongo
 
 import (
 	"context"
-	"go-modular-monolith/internal/modules/MODULEPLACEHOLDER/domain"
+	"github.com/kamil5b/go-ptse-monolith/internal/modules/MODULEPLACEHOLDER/domain"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 

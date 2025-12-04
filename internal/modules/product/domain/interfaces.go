@@ -3,7 +3,7 @@ package domain
 import (
 	"context"
 
-	sharedctx "go-modular-monolith/internal/shared/context"
+	sharedctx "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
 )
 
 // Handler defines the interface for product HTTP handlers

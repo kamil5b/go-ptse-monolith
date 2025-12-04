@@ -1,7 +1,7 @@
 package fiber
 
 import (
-	transportHTTP "go-modular-monolith/internal/transports/http"
+	transportHTTP "github.com/kamil5b/go-ptse-monolith/internal/transports/http"
 
 	fiberpkg "github.com/gofiber/fiber/v2"
 )

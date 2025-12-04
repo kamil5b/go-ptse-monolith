@@ -1,4 +1,4 @@
-module go-modular-monolith
+module github.com/kamil5b/go-ptse-monolith
 
 go 1.24.7
 
