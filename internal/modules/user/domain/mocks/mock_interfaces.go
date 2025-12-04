@@ -8,10 +8,9 @@ import (
 	context "context"
 	reflect "reflect"
 
+	gomock "github.com/golang/mock/gomock"
 	domain "github.com/kamil5b/go-ptse-monolith/internal/modules/user/domain"
 	context0 "github.com/kamil5b/go-ptse-monolith/internal/shared/context"
-
-	gomock "github.com/golang/mock/gomock"
 )
 
 // MockHandler is a mock of Handler interface.

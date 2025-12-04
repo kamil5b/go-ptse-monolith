@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"time"
 )
 
@@ -46,9 +47,11 @@ func (rp *RetryPolicy) CalculateBackoff(attempt int) time.Duration {
 	// Add jitter to prevent thundering herd
 	jitterAmount := backoffMs * rp.JitterFraction
 	jitterRange := time.Duration(jitterAmount * float64(time.Millisecond))
-
-	// Add random jitter (simplified - in production use rand.Int63n)
-	jitter := jitterRange / 2
+	// Add random jitter using rand.Int63n for better randomness
+	jitter := time.Duration(0)
+	if jitterRange > 0 {
+		jitter = time.Duration(rand.Int63n(int64(jitterRange)))
+	}
 
 	return time.Duration(backoffMs)*time.Millisecond + jitter
 }

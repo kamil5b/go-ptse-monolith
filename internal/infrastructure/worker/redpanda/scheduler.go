@@ -127,8 +127,27 @@ func (s *DelayedTaskScheduler) promoteToMainTopic(ctx context.Context, msg kafka
 
 // requeueDelayedTask requeues a task that's not yet ready
 func (s *DelayedTaskScheduler) requeueDelayedTask(ctx context.Context, msg kafka.Message, waitTime time.Duration) error {
-	// For now, just write back to delayed topic
-	// In production, you might want to use a different mechanism to avoid thundering herd
-	// Consider using exponential backoff or a priority queue
-	return nil // Kafka will keep the message in the log
+	// Add exponential backoff header
+	var backoff int64 = waitTime.Milliseconds()
+	newHeaders := append(msg.Headers, kafka.Header{Key: "backoff_ms", Value: []byte(fmt.Sprintf("%d", backoff))})
+
+	// Optionally, update scheduled_at to new time
+	newScheduledAt := time.Now().Add(waitTime).Unix()
+	for i, h := range newHeaders {
+		if h.Key == "scheduled_at" {
+			newHeaders[i].Value, _ = json.Marshal(newScheduledAt)
+			goto writeMsg
+		}
+	}
+	newHeaders = append(newHeaders, kafka.Header{Key: "scheduled_at", Value: []byte(fmt.Sprintf("%d", newScheduledAt))})
+
+writeMsg:
+	requeuedMsg := kafka.Message{
+		Key:     msg.Key,
+		Value:   msg.Value,
+		Headers: newHeaders,
+	}
+
+	// Write back to delayed topic
+	return s.taskWriter.WriteMessages(ctx, requeuedMsg)
 }

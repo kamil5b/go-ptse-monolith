@@ -366,11 +366,18 @@ For detailed documentation, see [Technical Documentation](docs/TECHNICAL_DOCUMEN
 - [x] **Storage Support** - Local, AWS S3, S3-Compatible (MinIO), Google Cloud Storage
 - [x] **gRPC & Protocol Buffers** - Full gRPC support with dual HTTP/gRPC handlers
 - [x] **Proto Generation** - Automated script for generating protobuf code
+- [x] **Unit Tests** - Comprehensive test coverage for core modules and shared kernel
+  - Product module: 81-100% coverage (handler, service, gRPC, proto adapters)
+  - User module: 84% service coverage
+  - Auth module: 77.4% service coverage (login, register, tokens, sessions, passwords)
+  - Shared kernel: 90-100% coverage (context, email, worker, validator, cache, errors)
+  - Logger: 91.3% coverage
 
 ### In Progress 🚧
 
-- [ ] Unit Tests (Priority: High)
-- [ ] Integration Tests for gRPC endpoints
+- [ ] Unit tests for HTTP handlers (Auth and User modules)
+- [ ] Integration tests for database repositories
+- [ ] End-to-end tests for complete workflows
 
 ### Planned 📋
 
