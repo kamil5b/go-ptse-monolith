@@ -1,9 +1,8 @@
 package worker
 
 import (
-	"fmt"
-
 	infraworker "go-modular-monolith/internal/infrastructure/worker"
+	logger "go-modular-monolith/internal/logger"
 	sharedworker "go-modular-monolith/internal/shared/worker"
 )
 
@@ -58,7 +57,10 @@ func (r *ModuleRegistry) RegisterAllTasks(
 	reportGenerationEnabled bool,
 ) error {
 	for i, provider := range r.modules {
-		fmt.Printf("[INFO] Getting tasks from module %d...\n", i+1)
+		logger.WithFields(map[string]interface{}{
+			"module_index": i + 1,
+			"total":        len(r.modules),
+		}).Info("Getting tasks from module")
 		taskDefs := provider.GetTaskDefinitions(
 			userRepository,
 			emailService,
@@ -68,7 +70,7 @@ func (r *ModuleRegistry) RegisterAllTasks(
 		)
 
 		for _, taskDef := range taskDefs {
-			fmt.Printf("[INFO] Registering task: %s\n", taskDef.TaskName)
+			logger.WithField("task_name", taskDef.TaskName).Info("Registering task")
 			registry.Register(taskDef.TaskName, taskDef.Handler)
 		}
 	}
@@ -81,11 +83,14 @@ func (r *ModuleRegistry) RegisterAllCronJobs(
 	emailNotificationsEnabled bool,
 ) error {
 	for i, provider := range r.modules {
-		fmt.Printf("[INFO] Getting cron jobs from module %d...\n", i+1)
+		logger.WithFields(map[string]interface{}{
+			"module_index": i + 1,
+			"total":        len(r.modules),
+		}).Info("Getting cron jobs from module")
 		cronDefs := provider.GetCronJobDefinitions(emailNotificationsEnabled)
 
 		for _, cronDef := range cronDefs {
-			fmt.Printf("[INFO] Scheduling cron job: %s\n", cronDef.JobID)
+			logger.WithField("cron_job_id", cronDef.JobID).Info("Scheduling cron job")
 			// Use the CronExpression from the definition, or default to Monthly(15, 9, 0)
 			cronExpr := cronDef.CronExpression
 			if cronExpr == (sharedworker.CronExpression{}) {
@@ -97,7 +102,7 @@ func (r *ModuleRegistry) RegisterAllCronJobs(
 				cronExpr,
 				cronDef.Payload,
 			); err != nil {
-				return fmt.Errorf("failed to add cron job %s: %w", cronDef.JobID, err)
+				return err
 			}
 		}
 	}

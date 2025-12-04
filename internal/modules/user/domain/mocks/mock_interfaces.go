@@ -106,6 +106,57 @@ func (mr *MockHandlerMockRecorder) Update(c interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockHandler)(nil).Update), c)
 }
 
+// MockEmailSender is a mock of EmailSender interface.
+type MockEmailSender struct {
+	ctrl     *gomock.Controller
+	recorder *MockEmailSenderMockRecorder
+}
+
+// MockEmailSenderMockRecorder is the mock recorder for MockEmailSender.
+type MockEmailSenderMockRecorder struct {
+	mock *MockEmailSender
+}
+
+// NewMockEmailSender creates a new mock instance.
+func NewMockEmailSender(ctrl *gomock.Controller) *MockEmailSender {
+	mock := &MockEmailSender{ctrl: ctrl}
+	mock.recorder = &MockEmailSenderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockEmailSender) EXPECT() *MockEmailSenderMockRecorder {
+	return m.recorder
+}
+
+// SendPasswordResetEmail mocks base method.
+func (m *MockEmailSender) SendPasswordResetEmail(ctx context.Context, userEmail, resetLink string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendPasswordResetEmail", ctx, userEmail, resetLink)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendPasswordResetEmail indicates an expected call of SendPasswordResetEmail.
+func (mr *MockEmailSenderMockRecorder) SendPasswordResetEmail(ctx, userEmail, resetLink interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendPasswordResetEmail", reflect.TypeOf((*MockEmailSender)(nil).SendPasswordResetEmail), ctx, userEmail, resetLink)
+}
+
+// SendWelcomeEmail mocks base method.
+func (m *MockEmailSender) SendWelcomeEmail(ctx context.Context, userEmail, userName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendWelcomeEmail", ctx, userEmail, userName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendWelcomeEmail indicates an expected call of SendWelcomeEmail.
+func (mr *MockEmailSenderMockRecorder) SendWelcomeEmail(ctx, userEmail, userName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendWelcomeEmail", reflect.TypeOf((*MockEmailSender)(nil).SendWelcomeEmail), ctx, userEmail, userName)
+}
+
 // MockService is a mock of Service interface.
 type MockService struct {
 	ctrl     *gomock.Controller

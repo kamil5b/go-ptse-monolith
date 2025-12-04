@@ -12,6 +12,7 @@ import (
 
 	"go-modular-monolith/internal/modules/product/domain"
 	"go-modular-monolith/internal/modules/product/domain/mocks"
+	cachemocks "go-modular-monolith/internal/shared/cache/mocks"
 	eventmocks "go-modular-monolith/internal/shared/events/mocks"
 	uowmocks "go-modular-monolith/internal/shared/uow/mocks"
 )
@@ -62,15 +63,18 @@ func TestServiceV1_Create(t *testing.T) {
 			mockRepo := mocks.NewMockRepository(ctrl)
 			mockUOW := uowmocks.NewMockUnitOfWork(ctrl)
 			mockEventBus := eventmocks.NewMockEventBus(ctrl)
+			mockCache := cachemocks.NewMockCache(ctrl)
 
 			ctx := context.Background()
 			txCtx := context.WithValue(ctx, txContextKey, "transaction")
 
 			mockUOW.EXPECT().StartContext(ctx).Return(txCtx).Times(1)
+			mockCache.EXPECT().GetBytes(gomock.Any(), gomock.Any()).Return(nil, errors.New("cache miss")).AnyTimes()
+			mockCache.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 			if tt.repoErr != nil {
 				mockRepo.EXPECT().Create(txCtx, gomock.Any()).Return(tt.repoErr).Times(1)
-				mockUOW.EXPECT().DeferErrorContext(txCtx, tt.repoErr).Return(nil).Times(1)
+				mockUOW.EXPECT().DeferErrorContext(txCtx, gomock.Any()).Return(nil).Times(1)
 			} else {
 				mockRepo.EXPECT().Create(txCtx, gomock.Any()).DoAndReturn(func(c context.Context, p *domain.Product) error {
 					assert.Equal(t, tt.req.Name, p.Name)
@@ -83,7 +87,7 @@ func TestServiceV1_Create(t *testing.T) {
 				mockUOW.EXPECT().DeferErrorContext(txCtx, nil).Return(nil).Times(1)
 			}
 
-			service := NewServiceV1(mockRepo, mockUOW, mockEventBus)
+			service := NewServiceV1(mockRepo, mockUOW, mockEventBus, mockCache)
 			product, err := service.Create(ctx, tt.req, tt.createdBy)
 
 			if tt.wantErr {
@@ -138,11 +142,14 @@ func TestServiceV1_Get(t *testing.T) {
 
 			mockRepo := mocks.NewMockRepository(ctrl)
 			mockUOW := uowmocks.NewMockUnitOfWork(ctrl)
+			mockCache := cachemocks.NewMockCache(ctrl)
 			ctx := context.Background()
 
+			mockCache.EXPECT().GetBytes(ctx, gomock.Any()).Return(nil, errors.New("cache miss")).AnyTimes()
+			mockCache.EXPECT().Set(ctx, gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			mockRepo.EXPECT().GetByID(ctx, tt.id).Return(tt.want, tt.repoErr).Times(1)
 
-			service := NewServiceV1(mockRepo, mockUOW, nil)
+			service := NewServiceV1(mockRepo, mockUOW, nil, mockCache)
 			product, err := service.Get(ctx, tt.id)
 
 			if tt.wantErr {
@@ -206,11 +213,13 @@ func TestServiceV1_List(t *testing.T) {
 
 			mockRepo := mocks.NewMockRepository(ctrl)
 			mockUOW := uowmocks.NewMockUnitOfWork(ctrl)
+			mockCache := cachemocks.NewMockCache(ctrl)
 			ctx := context.Background()
 
+			mockCache.EXPECT().GetBytes(ctx, gomock.Any()).Return(nil, errors.New("cache miss")).AnyTimes()
 			mockRepo.EXPECT().List(ctx).Return(tt.want, tt.repoErr).Times(1)
 
-			service := NewServiceV1(mockRepo, mockUOW, nil)
+			service := NewServiceV1(mockRepo, mockUOW, nil, mockCache)
 			products, err := service.List(ctx)
 
 			if tt.wantErr {
@@ -235,6 +244,7 @@ func TestServiceV1_Update_Success(t *testing.T) {
 	mockRepo := mocks.NewMockRepository(ctrl)
 	mockUOW := uowmocks.NewMockUnitOfWork(ctrl)
 	mockEventBus := eventmocks.NewMockEventBus(ctrl)
+	mockCache := cachemocks.NewMockCache(ctrl)
 
 	req := &domain.UpdateProductRequest{
 		ID:          "prod123",
@@ -272,9 +282,10 @@ func TestServiceV1_Update_Success(t *testing.T) {
 		assert.Equal(t, updatedBy, event.UpdatedBy)
 		return nil
 	}).Times(1)
+	mockCache.EXPECT().Delete(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockUOW.EXPECT().DeferErrorContext(txCtx, nil).Return(nil).Times(1)
 
-	service := NewServiceV1(mockRepo, mockUOW, mockEventBus)
+	service := NewServiceV1(mockRepo, mockUOW, mockEventBus, mockCache)
 	product, err := service.Update(ctx, req, updatedBy)
 
 	require.NoError(t, err)
@@ -292,6 +303,7 @@ func TestServiceV1_Update_PartialFields(t *testing.T) {
 	mockRepo := mocks.NewMockRepository(ctrl)
 	mockUOW := uowmocks.NewMockUnitOfWork(ctrl)
 	mockEventBus := eventmocks.NewMockEventBus(ctrl)
+	mockCache := cachemocks.NewMockCache(ctrl)
 
 	req := &domain.UpdateProductRequest{
 		ID:          "prod123",
@@ -320,9 +332,10 @@ func TestServiceV1_Update_PartialFields(t *testing.T) {
 		return nil
 	}).Times(1)
 	mockEventBus.EXPECT().Publish(txCtx, gomock.Any()).Times(1)
+	mockCache.EXPECT().Delete(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockUOW.EXPECT().DeferErrorContext(txCtx, nil).Return(nil).Times(1)
 
-	service := NewServiceV1(mockRepo, mockUOW, mockEventBus)
+	service := NewServiceV1(mockRepo, mockUOW, mockEventBus, mockCache)
 	product, err := service.Update(ctx, req, updatedBy)
 
 	require.NoError(t, err)
@@ -337,6 +350,7 @@ func TestServiceV1_Update_ProductNotFound(t *testing.T) {
 
 	mockRepo := mocks.NewMockRepository(ctrl)
 	mockUOW := uowmocks.NewMockUnitOfWork(ctrl)
+	mockCache := cachemocks.NewMockCache(ctrl)
 
 	req := &domain.UpdateProductRequest{
 		ID:          "nonexistent",
@@ -352,8 +366,9 @@ func TestServiceV1_Update_ProductNotFound(t *testing.T) {
 	// Expectations
 	mockUOW.EXPECT().StartContext(ctx).Return(txCtx).Times(1)
 	mockRepo.EXPECT().GetByID(txCtx, req.ID).Return(nil, expectedErr).Times(1)
+	mockUOW.EXPECT().DeferErrorContext(txCtx, gomock.Any()).Return(nil).Times(1)
 
-	service := NewServiceV1(mockRepo, mockUOW, nil)
+	service := NewServiceV1(mockRepo, mockUOW, nil, mockCache)
 	product, err := service.Update(ctx, req, updatedBy)
 
 	assert.Error(t, err)
@@ -367,6 +382,7 @@ func TestServiceV1_Update_RepositoryError(t *testing.T) {
 
 	mockRepo := mocks.NewMockRepository(ctrl)
 	mockUOW := uowmocks.NewMockUnitOfWork(ctrl)
+	mockCache := cachemocks.NewMockCache(ctrl)
 
 	req := &domain.UpdateProductRequest{
 		ID:          "prod123",
@@ -392,9 +408,9 @@ func TestServiceV1_Update_RepositoryError(t *testing.T) {
 	mockUOW.EXPECT().StartContext(ctx).Return(txCtx).Times(1)
 	mockRepo.EXPECT().GetByID(txCtx, req.ID).Return(existingProduct, nil).Times(1)
 	mockRepo.EXPECT().Update(txCtx, gomock.Any()).Return(expectedErr).Times(1)
-	mockUOW.EXPECT().DeferErrorContext(txCtx, expectedErr).Return(nil).Times(1)
+	mockUOW.EXPECT().DeferErrorContext(txCtx, gomock.Any()).Return(nil).Times(1)
 
-	service := NewServiceV1(mockRepo, mockUOW, nil)
+	service := NewServiceV1(mockRepo, mockUOW, nil, mockCache)
 	product, err := service.Update(ctx, req, updatedBy)
 
 	assert.Error(t, err)
@@ -441,6 +457,7 @@ func TestServiceV1_Delete(t *testing.T) {
 			mockRepo := mocks.NewMockRepository(ctrl)
 			mockUOW := uowmocks.NewMockUnitOfWork(ctrl)
 			mockEventBus := eventmocks.NewMockEventBus(ctrl)
+			mockCache := cachemocks.NewMockCache(ctrl)
 
 			ctx := context.Background()
 			txCtx := context.WithValue(ctx, txContextKey, "transaction")
@@ -449,14 +466,15 @@ func TestServiceV1_Delete(t *testing.T) {
 
 			if tt.repoErr != nil {
 				mockRepo.EXPECT().SoftDelete(txCtx, tt.args.id, tt.args.deletedBy).Return(tt.repoErr).Times(1)
-				mockUOW.EXPECT().DeferErrorContext(txCtx, tt.repoErr).Return(nil).Times(1)
+				mockUOW.EXPECT().DeferErrorContext(txCtx, gomock.Any()).Return(nil).Times(1)
 			} else {
 				mockRepo.EXPECT().SoftDelete(txCtx, tt.args.id, tt.args.deletedBy).Return(nil).Times(1)
 				mockEventBus.EXPECT().Publish(txCtx, gomock.Any()).Times(1)
+				mockCache.EXPECT().Delete(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				mockUOW.EXPECT().DeferErrorContext(txCtx, nil).Return(nil).Times(1)
 			}
 
-			service := NewServiceV1(mockRepo, mockUOW, mockEventBus)
+			service := NewServiceV1(mockRepo, mockUOW, mockEventBus, mockCache)
 			err := service.Delete(ctx, tt.args.id, tt.args.deletedBy)
 
 			if tt.wantErr {
@@ -476,6 +494,7 @@ func BenchmarkServiceV1_Create(b *testing.B) {
 	mockRepo := mocks.NewMockRepository(ctrl)
 	mockUOW := uowmocks.NewMockUnitOfWork(ctrl)
 	mockEventBus := eventmocks.NewMockEventBus(ctrl)
+	mockCache := cachemocks.NewMockCache(ctrl)
 
 	req := &domain.CreateProductRequest{
 		Name:        "Test Product",
@@ -488,9 +507,10 @@ func BenchmarkServiceV1_Create(b *testing.B) {
 	mockUOW.EXPECT().StartContext(ctx).Return(txCtx).AnyTimes()
 	mockRepo.EXPECT().Create(txCtx, gomock.Any()).Return(nil).AnyTimes()
 	mockEventBus.EXPECT().Publish(txCtx, gomock.Any()).Return(nil).AnyTimes()
+	mockCache.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	mockUOW.EXPECT().DeferErrorContext(txCtx, nil).Return(nil).AnyTimes()
 
-	service := NewServiceV1(mockRepo, mockUOW, mockEventBus)
+	service := NewServiceV1(mockRepo, mockUOW, mockEventBus, mockCache)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

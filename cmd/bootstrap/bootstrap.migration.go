@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	"go-modular-monolith/internal/app/core"
+	logger "go-modular-monolith/internal/logger"
 
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
@@ -107,9 +108,15 @@ func RunMigrationMongo(args []string) error {
 				if err2 != nil {
 					return fmt.Errorf("run migration %s failed: %v, mongosh out: %s, mongo out: %s", f, err, string(out), string(out2))
 				}
-				fmt.Printf("mongo output: %s\n", string(out2))
+				logger.WithFields(map[string]interface{}{
+					"migration": f,
+					"output":    string(out2),
+				}).Info("MongoDB migration executed (mongo)")
 			} else {
-				fmt.Printf("mongosh output: %s\n", string(out))
+				logger.WithFields(map[string]interface{}{
+					"migration": f,
+					"output":    string(out),
+				}).Info("MongoDB migration executed (mongosh)")
 			}
 		}
 	case "down":

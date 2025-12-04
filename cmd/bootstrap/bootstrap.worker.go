@@ -13,6 +13,7 @@ import (
 	"go-modular-monolith/internal/app/worker"
 	infraMongo "go-modular-monolith/internal/infrastructure/db/mongo"
 	infraSQL "go-modular-monolith/internal/infrastructure/db/sql"
+	logger "go-modular-monolith/internal/logger"
 	userworker "go-modular-monolith/internal/modules/user/worker"
 )
 
@@ -30,7 +31,7 @@ func RunWorker() error {
 
 	// Check if workers are enabled
 	if !featureFlag.Worker.Enabled || featureFlag.Worker.Backend == "disable" {
-		return fmt.Errorf("workers are not enabled (feature flags: enabled=%v, backend=%s)", featureFlag.Worker.Enabled, featureFlag.Worker.Backend)
+		return errors.New("workers are not enabled")
 	}
 
 	// Initialize databases
@@ -39,7 +40,7 @@ func RunWorker() error {
 		if featureFlag.Repository.User == "postgres" || featureFlag.Repository.Product == "postgres" || featureFlag.Repository.Authentication == "postgres" {
 			return err
 		}
-		fmt.Println("[WARN] PostgreSQL not loaded:", err)
+		logger.WithField("error", err).Warn("PostgreSQL connection failed")
 	}
 	defer func() {
 		if db != nil {
@@ -52,7 +53,7 @@ func RunWorker() error {
 		if featureFlag.Repository.Product == "mongo" || featureFlag.Repository.Authentication == "mongo" {
 			return err
 		}
-		fmt.Println("[WARN] MongoDB not loaded:", err)
+		logger.WithField("error", err).Warn("MongoDB connection failed")
 	}
 	defer func() {
 		if mongo != nil {
@@ -70,7 +71,7 @@ func RunWorker() error {
 	workerManager := worker.NewWorkerManager(container)
 
 	// Setup module task registrations
-	fmt.Println("[INFO] Setting up task registrations...")
+	logger.Info("Setting up task registrations...")
 	moduleRegistry := worker.NewModuleRegistry()
 
 	// Register user module tasks (module only provides definitions, no app imports)
@@ -89,13 +90,13 @@ func RunWorker() error {
 	}
 
 	// Register all collected tasks with the worker server
-	fmt.Println("[INFO] Registering all tasks with worker server...")
+	logger.Info("Registering all tasks with worker server...")
 	if err := workerManager.RegisterTasks(); err != nil {
 		return fmt.Errorf("failed to register tasks: %w", err)
 	}
 
 	// Register all cron jobs from modules
-	fmt.Println("[INFO] Registering cron jobs...")
+	logger.Info("Registering cron jobs...")
 	if err := moduleRegistry.RegisterAllCronJobs(
 		workerManager.GetCronScheduler(),
 		featureFlag.Worker.Tasks.EmailNotifications,
@@ -114,25 +115,25 @@ func RunWorker() error {
 	// Start the worker server in a goroutine
 	errChan := make(chan error, 1)
 	go func() {
-		fmt.Printf("[INFO] Worker server running (backend: %s)\n", featureFlag.Worker.Backend)
+		logger.WithField("backend", featureFlag.Worker.Backend).Info("Worker server running")
 		errChan <- workerManager.Start(ctx)
 	}()
 
 	// Wait for either a signal or an error
 	select {
 	case sig := <-sigChan:
-		fmt.Printf("\n[INFO] Received signal %v, initiating graceful shutdown...\n", sig)
+		logger.WithField("signal", sig).Info("Received signal, initiating graceful shutdown")
 		cancel()
 		// Give the server a moment to shut down cleanly
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer shutdownCancel()
 		if err := workerManager.Stop(shutdownCtx); err != nil {
-			fmt.Printf("[WARN] Error during worker shutdown: %v\n", err)
+			logger.WithField("error", err).Warn("Error during worker shutdown")
 		}
-		fmt.Println("[INFO] Worker server stopped")
+		logger.Info("Worker server stopped")
 		return nil
 	case err := <-errChan:
-		fmt.Printf("[ERROR] Worker server error: %v\n", err)
+		logger.WithField("error", err).Error("Worker server error")
 		return err
 	}
 }

@@ -1,14 +1,35 @@
-# Go Modular Monolith
+# Go-PSTE-Boilerplate
 
-A production-ready, modular monolithic application built with Go implementing clean architecture principles with pluggable components.
+A production-ready, modular monolithic boilerplate built with Go implementing clean architecture principles with **Plug, Swap, Toggle, Extract** capabilities.
 
 [![Go Version](https://img.shields.io/badge/Go-1.24.7-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Features
+## PSTE Architecture
 
-- 🔄 **Switchable HTTP Frameworks** - Echo or Gin via configuration
-- 🗄️ **Multiple Database Backends** - PostgreSQL and MongoDB support per module
+**Plug** • **Swap** • **Toggle** • **Extract**
+
+### Core Capabilities
+
+- 🔌 **Plug** - Pluggable infrastructure components:
+  - HTTP frameworks (Echo, Gin, Fiber, fasthttp, net/http)
+  - Cache backends (Redis, Memory)
+  - File storage (S3, GCS, Local, Noop)
+  - Email services (SMTP, Mailgun)
+  - Event bus implementations (Memory, RabbitMQ, Redpanda)
+  - Worker backends (Asynq, RabbitMQ, Cron Scheduler)
+
+- 🔄 **Swap** - Swap implementations per module:
+  - Database backends (PostgreSQL, MongoDB)
+  - Service implementations (v1, noop, disable)
+  - Handler implementations (v1, noop, disable)
+  - Repository implementations (SQL, Mongo, noop)
+
+- 🎛️ **Toggle** - Toggle features and implementations via feature flags
+- 📦 **Extract** - Design for easy extraction into microservices
+
+### Additional Features
+
 - 🔐 **Complete Authentication** - JWT, Session-based, and Basic Auth
 - 🛡️ **Middleware Support** - Authentication, authorization, and role-based access
 - 📦 **Modular Architecture** - Domain-per-module with isolated boundaries
@@ -30,8 +51,8 @@ A production-ready, modular monolithic application built with Go implementing cl
 
 ```bash
 # Clone the repository
-git clone https://github.com/kamil5b/go-modular-monolith.git
-cd go-modular-monolith
+git clone https://github.com/kamil5b/go-pste-boilerplate.git
+cd go-pste-boilerplate
 
 # Install dependencies
 go mod tidy
@@ -100,7 +121,7 @@ repository:
 ## Project Structure
 
 ```
-go-modular-monolith/
+go-pste-boilerplate/
 ├── cmd/
 │   ├── bootstrap/          # Application bootstrapping
 │   └── lint-deps/          # Dependency linter tool
@@ -170,35 +191,140 @@ go-modular-monolith/
 | Component | Technology |
 |-----------|------------|
 | Language | Go 1.24.7 |
-| HTTP Frameworks | Echo v4, Gin v1 |
+| HTTP Frameworks | Echo v4, Gin v1, Fiber, fasthttp, net/http |
 | SQL Database | PostgreSQL (sqlx) |
 | NoSQL Database | MongoDB |
+| Cache | Redis, Memory |
+| File Storage | S3, GCS, Local, Noop |
+| Email | SMTP, Mailgun |
+| Event Bus | Memory, RabbitMQ, Redpanda |
+| Workers | Asynq, RabbitMQ, Cron Scheduler |
 | Authentication | JWT (golang-jwt/jwt/v5) |
 | Migrations | Goose, mongosh |
 | Logging | Zerolog |
+
+## Strict Import Regulations
+
+To maintain module isolation and prevent dependency chaos, PSTE enforces strict dependency boundaries:
+
+### Module Isolation Rules
+
+- ✅ **Modules can import**: Own domain, shared kernel, own ACL
+- ❌ **Modules cannot import**: Other modules directly, /app/**, /infrastructure/**
+- ✅ **ACL (Anti-Corruption Layer) can import**: Own domain + other module domains (by design)
+- ✅ **Shared kernel imports**: Only stdlib and external packages (never modules)
+
+### Layer-Specific Rules
+
+| Layer | Can Import | Cannot Import |
+|-------|------------|---------------|
+| **Domain** | Shared kernel only | Other modules, services |
+| **Handler** | Own domain, shared | Other modules, other handlers |
+| **Service** | Own domain, shared, own ACL | Other modules (except via ACL) |
+| **Repository** | Own domain, shared | Other modules |
+| **ACL** | Own + other module domains | Other layer implementations |
+
+### Dependency Linter
+
+A built-in linter enforces these rules automatically:
+
+```bash
+go run cmd/lint-deps/main.go        # Check violations
+go run cmd/lint-deps/main.go -v     # Verbose output
+```
+
+The linter catches:
+- Cross-module imports
+- Deprecated domain paths
+- Invalid /app and /infrastructure imports
+- Shared kernel violations
+- Cyclic dependencies
+
+## Architecture Deep Dive
+
+### What is PSTE?
+
+PSTE is a synthesis of proven architectural patterns designed for enterprise-grade, long-lived applications:
+
+| Pattern | How PSTE Uses It |
+|---------|-----------------|
+| **Clean Architecture** | Separates concerns into layers (Domain → Service → Handler → Repository) |
+| **Modular Monolith** | Single deployment with multiple independent modules |
+| **Domain-Driven Design** | Each module has its own domain models and boundaries |
+| **Dependency Injection** | Central container manages object creation and wiring |
+| **Strategy/Factory Pattern** | Multiple implementations selectable at runtime |
+| **Event-Driven Architecture** | Async inter-module communication via event bus |
+| **Strict Import Rules** | Enforced boundaries prevent coupling |
+
+### PSTE Strengths
+
+✅ **Flexibility** - Swap any component without code changes  
+✅ **Testability** - Clean layers + DI make unit testing straightforward  
+✅ **Modularity** - Clear boundaries prevent architectural decay  
+✅ **Scalability** - Extract modules to microservices when needed  
+✅ **Maintainability** - Domain isolation makes code easier to understand  
+✅ **Future-proof** - Designed for evolution, not fixed architecture  
+✅ **Team autonomy** - Teams own modules, clear ownership boundaries  
+
+### PSTE Trade-offs
+
+⚖️ **Complexity** - More files and abstractions than simpler patterns  
+⚖️ **Learning curve** - Developers need to understand multiple patterns  
+⚖️ **Boilerplate** - More code for simple operations (CRUD endpoints)  
+⚖️ **Runtime overhead** - Interface indirection + DI container add latency  
+⚖️ **Implicit dependencies** - Events make dependencies less visible  
+⚖️ **Over-engineering risk** - Easy to add abstraction when not needed  
+
+### When PSTE Shines
+
+✅ Medium to large teams (5+ engineers)  
+✅ Products with evolving requirements  
+✅ Multi-domain business logic  
+✅ Teams planning microservices migration  
+✅ Projects lasting 2+ years  
+
+### When PSTE May Be Overkill
+
+⚠️ Startups/MVP phase (use simpler patterns first)  
+⚠️ Simple CRUD APIs (Clean Architecture alone may suffice)  
+⚠️ Single-person teams  
+⚠️ Throw-away prototypes  
+⚠️ Real-time/ultra-high-performance systems requiring minimal latency  
 
 ## Documentation
 
 For detailed documentation, see [Technical Documentation](docs/TECHNICAL_DOCUMENTATION.md).
 
-## Roadmap
+## Roadmap – Project Checklist
 
-- [x] Architecture & Infrastructure setup
-- [x] Product & User CRUD
-- [x] SQL & MongoDB repository support
-- [x] Echo & Gin framework integration
-- [x] Authentication (JWT, Session, Basic Auth)
-- [x] Middleware integration
-- [x] Shared Kernel (Events, Errors, Context, UoW)
-- [x] Domain-per-Module Pattern
-- [x] Anti-Corruption Layer (ACL)
-- [x] Dependency Linter
-- [ ] Unit Tests
-- [ ] Redis caching
-- [ ] Worker support (Asynq, RabbitMQ)
-- [ ] File storage (S3, GCS, MinIO)
-- [ ] gRPC & Protocol Buffers
+### Completed ✅
+
+- [x] Architecture & Infrastructure setup (including .gitkeep placeholders)
+- [x] Product CRUD: HTTP Echo → v1 → SQL repository
+- [x] SQL & MongoDB repository support with migrations
+- [x] Gin framework integration
+- [x] Utilize Request & Response models
+- [x] User CRUD implementation
+- [x] Authentication system: JWT, Basic Auth, Session-based (untested)
+- [x] Middleware integration (untested)
+- [x] Shared Kernel (`internal/shared/`) - Events, Errors, Context, UoW, Validator
+- [x] Domain-per-Module Pattern - Each module owns its domain types
+- [x] Anti-Corruption Layer (ACL) - Clean cross-module communication
+- [x] Dependency Linter (`cmd/lint-deps/`) - Enforces module isolation
+- [x] Shared Context Interface (`sharedctx.Context`) - Framework-agnostic handlers
+- [x] Redis integration (caching)
+- [x] **Worker Support** - Asynq, RabbitMQ, and Redpanda integration
+- [x] **Email Services** - SMTP and Mailgun support with worker integration
+- [x] **Storage Support** - Local, AWS S3, S3-Compatible (MinIO), Google Cloud Storage
+
+### In Progress 🚧
+
+- [ ] Unit Tests (Priority: High)
+
+### Planned 📋
+- [ ] gRPC & Protocol Buffers support
 - [ ] WebSocket integration
+- [ ] OpenTelemetry integration for distributed tracing
 
 ## Contributing
 

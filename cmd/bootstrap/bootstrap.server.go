@@ -2,13 +2,13 @@ package bootstrap
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 
 	"go-modular-monolith/internal/app/core"
 	appHttp "go-modular-monolith/internal/app/http"
 	infraMongo "go-modular-monolith/internal/infrastructure/db/mongo"
 	infraSQL "go-modular-monolith/internal/infrastructure/db/sql"
+	logger "go-modular-monolith/internal/logger"
 
 	"github.com/valyala/fasthttp"
 )
@@ -28,7 +28,7 @@ func RunServer() error {
 		if featureFlag.Repository.Product == "postgres" {
 			return err
 		}
-		fmt.Println("[ERROR] Postgres not loaded:", err)
+		logger.WithField("error", err).Error("PostgreSQL connection failed")
 	}
 	defer func() {
 		if db != nil {
@@ -41,7 +41,7 @@ func RunServer() error {
 		if featureFlag.Repository.Product == "mongo" {
 			return err
 		}
-		fmt.Println("[ERROR] MongoDB not loaded:", err)
+		logger.WithField("error", err).Error("MongoDB connection failed")
 	}
 	defer func() {
 		if mongo != nil {

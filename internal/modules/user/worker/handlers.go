@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	logger "go-modular-monolith/internal/logger"
 	userdomain "go-modular-monolith/internal/modules/user/domain"
 	"go-modular-monolith/internal/shared/email"
 	sharedworker "go-modular-monolith/internal/shared/worker"
@@ -62,7 +63,11 @@ func (h *UserWorkerHandler) HandleSendWelcomeEmail(ctx context.Context, payload 
 		return fmt.Errorf("failed to send welcome email: %w", err)
 	}
 
-	fmt.Printf("Sent welcome email to %s (%s)\n", user.Name, user.Email)
+	logger.WithFields(map[string]interface{}{
+		"user_id": user.ID,
+		"email":   user.Email,
+		"name":    user.Name,
+	}).Info("Welcome email sent")
 
 	return nil
 }
@@ -101,7 +106,11 @@ func (h *UserWorkerHandler) HandleSendPasswordResetEmail(ctx context.Context, pa
 		return fmt.Errorf("failed to send password reset email: %w", err)
 	}
 
-	fmt.Printf("Sent password reset email to %s (%s)\n", user.Name, user.Email)
+	logger.WithFields(map[string]interface{}{
+		"user_id": user.ID,
+		"email":   user.Email,
+		"name":    user.Name,
+	}).Info("Password reset email sent")
 
 	return nil
 }
@@ -146,7 +155,10 @@ func (h *UserWorkerHandler) HandleExportUserData(ctx context.Context, payload sh
 	// Then send notification to user with download link
 	_ = exportData // Placeholder - implementation depends on storage backend
 
-	fmt.Printf("Successfully exported user data for %s in format %s\n", p.UserID, p.Format)
+	logger.WithFields(map[string]interface{}{
+		"user_id": p.UserID,
+		"format":  p.Format,
+	}).Info("User data exported")
 
 	return nil
 }
@@ -192,7 +204,10 @@ func (h *UserWorkerHandler) HandleGenerateUserReport(ctx context.Context, payloa
 	// Then send notification email to user with report details
 	_ = reportContent // Placeholder - implementation depends on storage backend
 
-	fmt.Printf("Successfully generated %s report for user %s\n", p.ReportType, p.UserID)
+	logger.WithFields(map[string]interface{}{
+		"user_id":     p.UserID,
+		"report_type": p.ReportType,
+	}).Info("User report generated")
 
 	return nil
 }
@@ -212,7 +227,7 @@ func (h *UserWorkerHandler) HandleSendMonthlyEmail(ctx context.Context, payload 
 		p.Message = "Today is the day"
 	}
 
-	fmt.Printf("[MONTHLY EMAIL] Starting monthly email task. Message: %s\n", p.Message)
+	logger.WithField("message", p.Message).Info("Starting monthly email task")
 
 	// Get all users
 	users, err := h.userRepository.List(ctx)
@@ -221,11 +236,11 @@ func (h *UserWorkerHandler) HandleSendMonthlyEmail(ctx context.Context, payload 
 	}
 
 	if len(users) == 0 {
-		fmt.Println("[MONTHLY EMAIL] No users found, skipping email send")
+		logger.Info("No users found, skipping email send")
 		return nil
 	}
 
-	fmt.Printf("[MONTHLY EMAIL] Found %d users to send emails to\n", len(users))
+	logger.WithField("user_count", len(users)).Info("Found users to send emails to")
 
 	// Send email to each user
 	successCount := 0
@@ -249,12 +264,21 @@ func (h *UserWorkerHandler) HandleSendMonthlyEmail(ctx context.Context, payload 
 		}
 
 		if err := h.emailService.Send(ctx, emailMsg); err != nil {
-			fmt.Printf("[MONTHLY EMAIL] Failed to send email to %s (%s): %v\n", user.Name, user.Email, err)
+			logger.WithFields(map[string]interface{}{
+				"user_id": user.ID,
+				"email":   user.Email,
+				"name":    user.Name,
+				"error":   err.Error(),
+			}).Error("Failed to send monthly email")
 			failureCount++
 			continue
 		}
 
-		fmt.Printf("[MONTHLY EMAIL] Sent to %s (%s)\n", user.Name, user.Email)
+		logger.WithFields(map[string]interface{}{
+			"user_id": user.ID,
+			"email":   user.Email,
+			"name":    user.Name,
+		}).Debug("Monthly email sent")
 		successCount++
 	}
 
@@ -262,6 +286,9 @@ func (h *UserWorkerHandler) HandleSendMonthlyEmail(ctx context.Context, payload 
 		return fmt.Errorf("failed to send email to any users: attempted %d, failed %d", len(users), failureCount)
 	}
 
-	fmt.Printf("[MONTHLY EMAIL] Task completed: %d sent, %d failed\n", successCount, failureCount)
+	logger.WithFields(map[string]interface{}{
+		"success_count": successCount,
+		"failure_count": failureCount,
+	}).Info("Monthly email task completed")
 	return nil
 }
