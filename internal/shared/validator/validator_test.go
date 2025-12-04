@@ -356,3 +356,530 @@ func TestErrorMessageFormat(t *testing.T) {
 	assert.Contains(t, errStr, "email")
 	assert.Contains(t, errStr, "VALIDATION_ERROR")
 }
+
+func TestValidateStructUUID(t *testing.T) {
+	type TestStruct struct {
+		ID string `json:"id" validate:"required,uuid"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Valid UUID", TestStruct{ID: "550e8400-e29b-41d4-a716-446655440000"}, true},
+		{"Invalid UUID", TestStruct{ID: "not-a-uuid"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStructURL(t *testing.T) {
+	type TestStruct struct {
+		Website string `json:"website" validate:"required,url"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Valid URL", TestStruct{Website: "https://example.com"}, true},
+		{"Invalid URL", TestStruct{Website: "not a url"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStructAlpha(t *testing.T) {
+	type TestStruct struct {
+		Name string `json:"name" validate:"required,alpha"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Valid", TestStruct{Name: "John"}, true},
+		{"WithNumber", TestStruct{Name: "John123"}, false},
+		{"WithSymbol", TestStruct{Name: "John-Doe"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStructGte(t *testing.T) {
+	type TestStruct struct {
+		Age int `json:"age" validate:"required,gte=18"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Valid", TestStruct{Age: 25}, true},
+		{"Boundary", TestStruct{Age: 18}, true},
+		{"Below", TestStruct{Age: 17}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStructGt(t *testing.T) {
+	type TestStruct struct {
+		Age int `json:"age" validate:"required,gt=18"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Valid", TestStruct{Age: 25}, true},
+		{"Equal", TestStruct{Age: 18}, false},
+		{"Below", TestStruct{Age: 17}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStructLte(t *testing.T) {
+	type TestStruct struct {
+		Age int `json:"age" validate:"required,lte=65"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Valid", TestStruct{Age: 25}, true},
+		{"Boundary", TestStruct{Age: 65}, true},
+		{"Above", TestStruct{Age: 66}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStructLt(t *testing.T) {
+	type TestStruct struct {
+		Age int `json:"age" validate:"required,lt=65"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Valid", TestStruct{Age: 25}, true},
+		{"Equal", TestStruct{Age: 65}, false},
+		{"Above", TestStruct{Age: 66}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStructEqfield(t *testing.T) {
+	type TestStruct struct {
+		Password        string `json:"password" validate:"required"`
+		PasswordConfirm string `json:"password_confirm" validate:"required,eqfield=Password"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Match", TestStruct{Password: "secret", PasswordConfirm: "secret"}, true},
+		{"NoMatch", TestStruct{Password: "secret", PasswordConfirm: "different"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStructNefield(t *testing.T) {
+	type TestStruct struct {
+		Field1 string `json:"field1" validate:"required"`
+		Field2 string `json:"field2" validate:"required,nefield=Field1"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Different", TestStruct{Field1: "value1", Field2: "value2"}, true},
+		{"Same", TestStruct{Field1: "value", Field2: "value"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStructMinNumeric(t *testing.T) {
+	type TestStruct struct {
+		Count int `json:"count" validate:"required,min=10"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Valid", TestStruct{Count: 15}, true},
+		{"TooSmall", TestStruct{Count: 5}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStructMaxNumeric(t *testing.T) {
+	type TestStruct struct {
+		Count int `json:"count" validate:"required,max=100"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Valid", TestStruct{Count: 50}, true},
+		{"TooLarge", TestStruct{Count: 150}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestGetValidatorSingleton(t *testing.T) {
+	v1 := GetValidator()
+	v2 := GetValidator()
+	v3 := GetValidator()
+
+	// All calls should return the same instance
+	assert.True(t, v1 == v2)
+	assert.True(t, v2 == v3)
+}
+
+func TestValidateStructMinStringType(t *testing.T) {
+	type TestStruct struct {
+		Name string `json:"name" validate:"required,min=5"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Valid", TestStruct{Name: "John Doe"}, true},
+		{"Boundary", TestStruct{Name: "John"}, false},
+		{"Minimum", TestStruct{Name: "Hello"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStructMaxStringType(t *testing.T) {
+	type TestStruct struct {
+		Name string `json:"name" validate:"required,max=10"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Valid", TestStruct{Name: "John"}, true},
+		{"Boundary", TestStruct{Name: "JohnDoeXXX"}, true},
+		{"TooLong", TestStruct{Name: "JohnDoeXXXX"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestGetErrorMessageWithDefault(t *testing.T) {
+	type TestStruct struct {
+		Value string `json:"value" validate:"required"`
+	}
+
+	// Test default case handling in getErrorMessage
+	err := ValidateStruct(TestStruct{Value: ""})
+	ve := err.(*sharederrors.ValidationError)
+	assert.True(t, ve.HasErrors())
+}
+
+func TestValidateStructNumericString(t *testing.T) {
+	type TestStruct struct {
+		Value string `json:"value" validate:"required,numeric"`
+	}
+
+	tests := []struct {
+		name    string
+		input   TestStruct
+		isValid bool
+	}{
+		{"Valid", TestStruct{Value: "12345"}, true},
+		{"Invalid", TestStruct{Value: "abc123"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.input)
+			if tt.isValid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStructWithJSONTagPriority(t *testing.T) {
+	type TestStruct struct {
+		UserEmail string `json:"email" validate:"required,email"`
+	}
+
+	err := ValidateStruct(TestStruct{UserEmail: ""})
+	ve := err.(*sharederrors.ValidationError)
+
+	// Error should use JSON tag name not field name
+	errMap := ve.ToMap()
+	// Check that the 'fields' key contains the error info
+	assert.NotNil(t, errMap)
+	assert.Equal(t, "VALIDATION_ERROR", errMap["code"])
+	fieldsData := errMap["fields"]
+	assert.NotNil(t, fieldsData)
+}
+
+func TestValidateStructJSONTagDash(t *testing.T) {
+	type TestStruct struct {
+		Skip  string `json:"-" validate:"required"`
+		Email string `json:"email" validate:"required,email"`
+	}
+
+	err := ValidateStruct(TestStruct{Skip: "", Email: ""})
+	ve := err.(*sharederrors.ValidationError)
+
+	// Dash means skip this field, so field name should be used as fallback
+	assert.True(t, ve.HasErrors())
+}
+
+func TestGetErrorMessageCoverage(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    interface{}
+		tag      string
+		expected string
+	}{
+		{
+			name: "uuid error",
+			value: struct {
+				ID string `json:"id" validate:"uuid"`
+			}{ID: "invalid"},
+			tag:      "uuid",
+			expected: "must be a valid UUID",
+		},
+		{
+			name: "url error",
+			value: struct {
+				Site string `json:"site" validate:"url"`
+			}{Site: "not-url"},
+			tag:      "url",
+			expected: "must be a valid URL",
+		},
+		{
+			name: "alpha error",
+			value: struct {
+				Name string `json:"name" validate:"alpha"`
+			}{Name: "Name123"},
+			tag:      "alpha",
+			expected: "must contain only alphabetic characters",
+		},
+		{
+			name: "gte error",
+			value: struct {
+				Age int `json:"age" validate:"gte=18"`
+			}{Age: 10},
+			tag:      "gte",
+			expected: "must be greater than or equal to",
+		},
+		{
+			name: "gt error",
+			value: struct {
+				Age int `json:"age" validate:"gt=18"`
+			}{Age: 18},
+			tag:      "gt",
+			expected: "must be greater than",
+		},
+		{
+			name: "lte error",
+			value: struct {
+				Age int `json:"age" validate:"lte=65"`
+			}{Age: 70},
+			tag:      "lte",
+			expected: "must be less than or equal to",
+		},
+		{
+			name: "lt error",
+			value: struct {
+				Age int `json:"age" validate:"lt=65"`
+			}{Age: 65},
+			tag:      "lt",
+			expected: "must be less than",
+		},
+		{
+			name: "eqfield error",
+			value: struct {
+				Password        string `json:"password" validate:"required"`
+				PasswordConfirm string `json:"password_confirm" validate:"eqfield=Password"`
+			}{Password: "sec", PasswordConfirm: "diff"},
+			tag:      "eqfield",
+			expected: "must be equal to",
+		},
+		{
+			name: "nefield error",
+			value: struct {
+				Field1 string `json:"field1" validate:"required"`
+				Field2 string `json:"field2" validate:"nefield=Field1"`
+			}{Field1: "same", Field2: "same"},
+			tag:      "nefield",
+			expected: "must not be equal to",
+		},
+		{
+			name: "default error case",
+			value: struct {
+				Field string `json:"field" validate:"required"`
+			}{Field: ""},
+			tag:      "required",
+			expected: "is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateStruct(tt.value)
+			require.Error(t, err)
+			ve := err.(*sharederrors.ValidationError)
+			assert.True(t, ve.HasErrors())
+			errStr := ve.Error()
+			assert.Contains(t, errStr, tt.expected)
+		})
+	}
+}
