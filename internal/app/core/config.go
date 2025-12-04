@@ -103,6 +103,43 @@ type EmailConfig struct {
 	Mailgun  MailgunConfig `yaml:"mailgun"`
 }
 
+type LocalStorageConfig struct {
+	BasePath          string `yaml:"base_path"`
+	MaxFileSize       int64  `yaml:"max_file_size"`
+	AllowPublicAccess bool   `yaml:"allow_public_access"`
+	PublicURL         string `yaml:"public_url"`
+}
+
+type S3StorageConfig struct {
+	Region               string `yaml:"region"`
+	Bucket               string `yaml:"bucket"`
+	AccessKeyID          string `yaml:"access_key_id"`
+	SecretAccessKey      string `yaml:"secret_access_key"`
+	Endpoint             string `yaml:"endpoint"`
+	UseSSL               bool   `yaml:"use_ssl"`
+	PathStyle            bool   `yaml:"path_style"`
+	PresignedURLTTL      int    `yaml:"presigned_url_ttl"`
+	ServerSideEncryption bool   `yaml:"server_side_encryption"`
+	StorageClass         string `yaml:"storage_class"`
+}
+
+type GCSStorageConfig struct {
+	ProjectID       string `yaml:"project_id"`
+	Bucket          string `yaml:"bucket"`
+	CredentialsFile string `yaml:"credentials_file"`
+	CredentialsJSON string `yaml:"credentials_json"`
+	StorageClass    string `yaml:"storage_class"`
+	Location        string `yaml:"location"`
+	MetadataCache   bool   `yaml:"metadata_cache"`
+}
+
+type StorageConfig struct {
+	Enabled bool               `yaml:"enabled"`
+	Local   LocalStorageConfig `yaml:"local"`
+	S3      S3StorageConfig    `yaml:"s3"`
+	GCS     GCSStorageConfig   `yaml:"gcs"`
+}
+
 type AppConfig struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
@@ -111,6 +148,7 @@ type AppConfig struct {
 	Auth     AuthConfig     `yaml:"auth"`
 	Worker   WorkerConfig   `yaml:"worker"`
 	Email    EmailConfig    `yaml:"email"`
+	Storage  StorageConfig  `yaml:"storage"`
 }
 
 type Config struct {

@@ -16,15 +16,15 @@
 - [x] Dependency Linter (`cmd/lint-deps/`) - Enforces module isolation
 - [x] Shared Context Interface (`sharedctx.Context`) - Framework-agnostic handlers
 - [x] Redis integration (caching)
+- [x] **Worker Support** - Asynq, RabbitMQ, and Redpanda integration
+- [x] **Email Services** - SMTP and Mailgun support with worker integration
+- [x] **Storage Support** - Local, AWS S3, S3-Compatible (MinIO), Google Cloud Storage
 
 ## In Progress 🚧
 
 - [ ] Unit Tests (Priority: High)
 
 ## Planned 📋
-
-- [ ] Worker support: Asynq, RabbitMQ, Redpanda
-- [ ] Storage support: S3-Compatible, GCS, MinIO, Local, etc
 - [ ] gRPC & Protocol Buffers support
 - [ ] WebSocket integration
 - [ ] OpenTelemetry integration for distributed tracing

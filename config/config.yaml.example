@@ -79,3 +79,37 @@ app:
       api_key: "key-xxxx"
       from_addr: "noreply@example.com"
       from_name: "MyApp"
+
+  storage:
+    enabled: false
+    
+    # Local filesystem configuration
+    local:
+      base_path: "./uploads"
+      max_file_size: 104857600  # 100MB in bytes
+      allow_public_access: false
+      public_url: "http://localhost:8080/files"
+
+    # AWS S3 configuration
+    s3:
+      region: "us-east-1"
+      bucket: "my-bucket"
+      access_key_id: "${AWS_ACCESS_KEY_ID}"
+      secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+      endpoint: ""  # Leave empty for AWS, set for MinIO/Spaces
+      use_ssl: true
+      path_style: false  # Set to true for MinIO
+      presigned_url_ttl: 3600
+      server_side_encryption: false
+      storage_class: "STANDARD"
+
+    # Google Cloud Storage configuration
+    gcs:
+      project_id: "my-project"
+      bucket: "my-bucket"
+      credentials_file: ""  # Path to service account JSON
+      credentials_json: "${GCS_CREDENTIALS}"  # Or use environment variable
+      storage_class: "STANDARD"
+      location: "US"
+      metadata_cache: true
+

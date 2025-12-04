@@ -29,3 +29,17 @@ worker:
 email:
   enabled: false
   provider: noop  # smtp, mailgun, noop
+
+storage:
+  enabled: false
+  backend: noop  # local, s3, gcs, s3-compatible, noop
+  
+  s3:
+    enable_encryption: false
+    storage_class: "STANDARD"
+    presigned_url_ttl: 3600
+  
+  gcs:
+    storage_class: "STANDARD"
+    metadata_cache: true
+

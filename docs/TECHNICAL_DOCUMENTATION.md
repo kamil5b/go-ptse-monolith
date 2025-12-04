@@ -2217,6 +2217,924 @@ email:
 
 ---
 
+## Storage Services
+
+The application supports multiple file storage backends for user uploads, exports, and media management. Storage services are designed to work seamlessly with the worker system for asynchronous file operations and provide a unified interface across different storage providers.
+
+### Supported Backends
+
+| Backend | Use Case | Features | Production Ready |
+|---------|----------|----------|------------------|
+| **Local Filesystem** | Development/Testing | Simple file storage on disk | ✅ Yes |
+| **AWS S3** | Cloud storage | Scalable, highly available, CDN integration | ✅ Yes |
+| **S3-Compatible** | MinIO, DigitalOcean Spaces | S3-compatible API providers | ✅ Yes |
+| **Google Cloud Storage (GCS)** | Google Cloud integration | Native GCS support, bucket operations | ✅ Yes |
+| **NoOp** | Testing | Mock implementation | ✅ Yes |
+
+### Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                   Service Layer                              │
+│                  (Business Logic)                            │
+└────────────────┬─────────────────────────────────────────────┘
+                 │ Upload/Download/Delete
+                 ▼
+┌──────────────────────────────────────────────────────────────┐
+│              Storage Service Layer                           │
+│   (Local / AWS S3 / GCS / S3-Compatible)                     │
+└────────────────┬─────────────────────────────────────────────┘
+                 │ Read/Write/Delete Operations
+                 ▼
+┌──────────────────────────────────────────────────────────────┐
+│            Storage Backend                                   │
+│   (Filesystem / AWS S3 / GCS / MinIO)                        │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Project Structure
+
+```
+internal/
+├── shared/
+│   └── storage/
+│       ├── storage.go         # StorageService interface
+│       └── errors.go          # Storage error types
+└── infrastructure/
+    └── storage/
+        ├── noop/
+        │   └── storage_noop.go         # NoOp implementation
+        ├── local/
+        │   └── storage_local.go        # Local filesystem
+        ├── s3/
+        │   └── storage_s3.go           # AWS S3 & compatible
+        └── gcs/
+            └── storage_gcs.go          # Google Cloud Storage
+```
+
+### Configuration
+
+#### config/config.yaml
+
+```yaml
+app:
+  storage:
+    enabled: true
+    local:
+      base_path: "./uploads"              # Base directory for local storage
+      max_file_size: 104857600             # 100MB in bytes
+      allow_public_access: false           # Serve files via HTTP
+      public_url: "http://localhost:8080/files"
+    
+    s3:
+      region: "us-east-1"                 # AWS region
+      bucket: "my-bucket"                 # S3 bucket name
+      access_key_id: "${S3_ACCESS_KEY}"   # Environment variable
+      secret_access_key: "${S3_SECRET}"   # Environment variable
+      endpoint: ""                         # Leave empty for AWS, set for MinIO/Spaces
+      use_ssl: true
+      path_style: false                    # Use path-style URLs (true for MinIO)
+      
+    gcs:
+      project_id: "my-project"            # GCP project ID
+      bucket: "my-bucket"                 # GCS bucket name
+      credentials_file: "/path/to/creds.json" # Service account JSON
+      credentials_json: "${GCS_CREDENTIALS}"  # Or use env var
+```
+
+#### config/featureflags.yaml
+
+```yaml
+storage:
+  enabled: true
+  backend: "local"  # local | s3 | gcs | s3-compatible | noop
+  
+  # Backend-specific feature flags
+  s3:
+    enable_encryption: true           # Enable server-side encryption
+    storage_class: "STANDARD"         # Storage class (STANDARD, GLACIER, etc)
+    presigned_url_ttl: 3600          # Presigned URL validity in seconds
+  
+  gcs:
+    storage_class: "STANDARD"         # Storage class
+    metadata_cache: true              # Cache object metadata
+```
+
+### Storage Service Interface
+
+```go
+// internal/shared/storage/storage.go
+package storage
+
+import (
+	"context"
+	"io"
+	"time"
+)
+
+// StorageObject represents metadata about a stored object
+type StorageObject struct {
+	Name          string                 // Object name/path
+	Size          int64                  // File size in bytes
+	ContentType   string                 // MIME type
+	ETag          string                 // Entity tag (MD5 or hash)
+	LastModified  time.Time              // Last modification time
+	Metadata      map[string]string      // Custom metadata
+	PresignedURL  string                 // Presigned URL (if applicable)
+}
+
+// UploadOptions configures upload behavior
+type UploadOptions struct {
+	ContentType     string                 // MIME type
+	Metadata        map[string]string      // Custom metadata
+	CacheControl    string                 // Cache-Control header
+	ContentEncoding string                 // Content-Encoding header
+	ACL             string                 // Access control (private/public-read)
+	ServerSideEncryption bool               // Enable encryption
+}
+
+// StorageService provides unified file storage operations
+type StorageService interface {
+	// Upload stores a file and returns metadata
+	Upload(ctx context.Context, path string, reader io.Reader, opts *UploadOptions) (*StorageObject, error)
+
+	// UploadBytes stores bytes and returns metadata
+	UploadBytes(ctx context.Context, path string, data []byte, opts *UploadOptions) (*StorageObject, error)
+
+	// Download retrieves a file
+	Download(ctx context.Context, path string) (io.ReadCloser, error)
+
+	// GetBytes retrieves file contents as bytes
+	GetBytes(ctx context.Context, path string) ([]byte, error)
+
+	// GetObject retrieves object metadata
+	GetObject(ctx context.Context, path string) (*StorageObject, error)
+
+	// Delete removes a file
+	Delete(ctx context.Context, path string) error
+
+	// DeletePrefix removes all objects with given prefix
+	DeletePrefix(ctx context.Context, prefix string) error
+
+	// Exists checks if object exists
+	Exists(ctx context.Context, path string) (bool, error)
+
+	// ListObjects lists objects in a path prefix
+	ListObjects(ctx context.Context, prefix string, recursive bool) ([]*StorageObject, error)
+
+	// GetPresignedURL generates a temporary public URL (if supported)
+	GetPresignedURL(ctx context.Context, path string, expiration time.Duration) (string, error)
+
+	// Copy copies an object within storage
+	Copy(ctx context.Context, sourcePath, destPath string) (*StorageObject, error)
+
+	// Health checks the health of the storage service
+	Health(ctx context.Context) error
+}
+```
+
+### Local Filesystem Implementation
+
+```go
+// internal/infrastructure/storage/local/storage_local.go
+package local
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"time"
+	"go-modular-monolith/internal/shared/storage"
+)
+
+type LocalStorageConfig struct {
+	BasePath            string        // Base directory path
+	MaxFileSize         int64         // Maximum file size in bytes
+	AllowPublicAccess   bool          // Serve files via HTTP
+	PublicURL           string        // Public URL prefix
+	CreateMissingDirs   bool          // Auto-create directories
+	FilePermissions     os.FileMode   // File permissions (default: 0644)
+	DirPermissions      os.FileMode   // Directory permissions (default: 0755)
+}
+
+// LocalStorageService stores files in local filesystem
+type LocalStorageService struct {
+	config LocalStorageConfig
+}
+
+func NewLocalStorageService(config LocalStorageConfig) (*LocalStorageService, error) {
+	// Validate and create base directory
+	if err := os.MkdirAll(config.BasePath, config.DirPermissions); err != nil {
+		return nil, fmt.Errorf("failed to create base directory: %w", err)
+	}
+
+	return &LocalStorageService{config: config}, nil
+}
+
+func (s *LocalStorageService) Upload(
+	ctx context.Context,
+	path string,
+	reader io.Reader,
+	opts *storage.UploadOptions,
+) (*storage.StorageObject, error) {
+	fullPath := filepath.Join(s.config.BasePath, path)
+
+	// Create directory if needed
+	if s.config.CreateMissingDirs {
+		if err := os.MkdirAll(filepath.Dir(fullPath), s.config.DirPermissions); err != nil {
+			return nil, fmt.Errorf("failed to create directory: %w", err)
+		}
+	}
+
+	// Create file
+	file, err := os.Create(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	// Copy data
+	written, err := io.Copy(file, reader)
+	if err != nil {
+		os.Remove(fullPath)
+		return nil, fmt.Errorf("failed to write file: %w", err)
+	}
+
+	// Check size limit
+	if written > s.config.MaxFileSize {
+		os.Remove(fullPath)
+		return nil, fmt.Errorf("file exceeds maximum size: %d > %d", written, s.config.MaxFileSize)
+	}
+
+	// Change permissions
+	if err := os.Chmod(fullPath, s.config.FilePermissions); err != nil {
+		return nil, fmt.Errorf("failed to set permissions: %w", err)
+	}
+
+	// Get file info
+	info, _ := os.Stat(fullPath)
+
+	result := &storage.StorageObject{
+		Name:         path,
+		Size:         written,
+		ContentType:  opts.ContentType,
+		LastModified: info.ModTime(),
+		Metadata:     opts.Metadata,
+	}
+
+	// Set presigned URL if public access enabled
+	if s.config.AllowPublicAccess {
+		result.PresignedURL = fmt.Sprintf("%s/%s", s.config.PublicURL, path)
+	}
+
+	return result, nil
+}
+
+func (s *LocalStorageService) Download(ctx context.Context, path string) (io.ReadCloser, error) {
+	fullPath := filepath.Join(s.config.BasePath, path)
+	return os.Open(fullPath)
+}
+
+func (s *LocalStorageService) Delete(ctx context.Context, path string) error {
+	fullPath := filepath.Join(s.config.BasePath, path)
+	return os.Remove(fullPath)
+}
+
+func (s *LocalStorageService) Exists(ctx context.Context, path string) (bool, error) {
+	fullPath := filepath.Join(s.config.BasePath, path)
+	_, err := os.Stat(fullPath)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// ... additional methods (GetObject, ListObjects, Copy, Health, etc.)
+```
+
+### AWS S3 & S3-Compatible Implementation
+
+```go
+// internal/infrastructure/storage/s3/storage_s3.go
+package s3
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"go-modular-monolith/internal/shared/storage"
+)
+
+type S3StorageConfig struct {
+	Region                string // AWS region
+	Bucket                string // S3 bucket name
+	AccessKeyID           string // AWS access key
+	SecretAccessKey       string // AWS secret key
+	Endpoint              string // Custom endpoint (for MinIO, etc)
+	UseSSL                bool   // Use SSL for endpoint
+	PathStyle             bool   // Use path-style URLs (true for MinIO)
+	PresignedURLTTL       int    // Presigned URL validity in seconds
+	ServerSideEncryption  bool   // Enable encryption
+	StorageClass          string // Storage class (STANDARD, GLACIER, etc)
+}
+
+// S3StorageService stores files in AWS S3 or compatible services
+type S3StorageService struct {
+	config        S3StorageConfig
+	client        *s3.Client
+	presigner     *s3.PresignClient
+	uploader      *manager.Uploader
+	downloader    *manager.Downloader
+}
+
+func NewS3StorageService(cfg S3StorageConfig) (*S3StorageService, error) {
+	// Load AWS config
+	awsCfg, err := config.LoadDefaultConfig(context.Background(),
+		config.WithRegion(cfg.Region),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	// Create S3 client
+	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		if cfg.Endpoint != "" {
+			o.BaseEndpoint = aws.String(cfg.Endpoint)
+			o.UsePathStyle = cfg.PathStyle
+		}
+	})
+
+	return &S3StorageService{
+		config:     cfg,
+		client:     client,
+		presigner:  s3.NewPresignClient(client),
+		uploader:   manager.NewUploader(client),
+		downloader: manager.NewDownloader(client),
+	}, nil
+}
+
+func (s *S3StorageService) Upload(
+	ctx context.Context,
+	path string,
+	reader io.Reader,
+	opts *storage.UploadOptions,
+) (*storage.StorageObject, error) {
+	// Prepare put object options
+	input := &s3.PutObjectInput{
+		Bucket: aws.String(s.config.Bucket),
+		Key:    aws.String(path),
+		Body:   reader,
+	}
+
+	// Set content type
+	if opts.ContentType != "" {
+		input.ContentType = aws.String(opts.ContentType)
+	}
+
+	// Set storage class
+	if s.config.StorageClass != "" {
+		input.StorageClass = types.StorageClass(s.config.StorageClass)
+	}
+
+	// Set server-side encryption
+	if s.config.ServerSideEncryption {
+		input.ServerSideEncryption = types.ServerSideEncryptionAes256
+	}
+
+	// Upload file
+	output, err := s.client.PutObject(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload object: %w", err)
+	}
+
+	// Get object metadata
+	headOutput, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(s.config.Bucket),
+		Key:    aws.String(path),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object metadata: %w", err)
+	}
+
+	// Generate presigned URL
+	presignInput := &s3.GetObjectInput{
+		Bucket: aws.String(s.config.Bucket),
+		Key:    aws.String(path),
+	}
+
+	presignOutput, err := s.presigner.PresignGetObject(ctx, presignInput,
+		func(opts *s3.PresignOptions) {
+			opts.Expires = time.Duration(s.config.PresignedURLTTL) * time.Second
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate presigned URL: %w", err)
+	}
+
+	return &storage.StorageObject{
+		Name:         path,
+		Size:         *headOutput.ContentLength,
+		ContentType:  *headOutput.ContentType,
+		ETag:         *output.ETag,
+		LastModified: *headOutput.LastModified,
+		Metadata:     headOutput.Metadata,
+		PresignedURL: presignOutput.URL,
+	}, nil
+}
+
+func (s *S3StorageService) Download(ctx context.Context, path string) (io.ReadCloser, error) {
+	output, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.config.Bucket),
+		Key:    aws.String(path),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to download object: %w", err)
+	}
+	return output.Body, nil
+}
+
+func (s *S3StorageService) Delete(ctx context.Context, path string) error {
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.config.Bucket),
+		Key:    aws.String(path),
+	})
+	return err
+}
+
+func (s *S3StorageService) GetPresignedURL(
+	ctx context.Context,
+	path string,
+	expiration time.Duration,
+) (string, error) {
+	presignInput := &s3.GetObjectInput{
+		Bucket: aws.String(s.config.Bucket),
+		Key:    aws.String(path),
+	}
+
+	presignOutput, err := s.presigner.PresignGetObject(ctx, presignInput,
+		func(opts *s3.PresignOptions) {
+			opts.Expires = expiration
+		},
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
+	}
+
+	return presignOutput.URL, nil
+}
+
+// ... additional methods (ListObjects, Copy, Health, etc.)
+```
+
+### Google Cloud Storage Implementation
+
+```go
+// internal/infrastructure/storage/gcs/storage_gcs.go
+package gcs
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"time"
+
+	"cloud.google.com/go/storage"
+	"google.golang.org/api/option"
+	storagepkg "go-modular-monolith/internal/shared/storage"
+)
+
+type GCSStorageConfig struct {
+	ProjectID        string // GCP project ID
+	Bucket           string // GCS bucket name
+	CredentialsFile  string // Path to service account JSON
+	CredentialsJSON  string // Inline JSON credentials
+	StorageClass     string // Storage class (STANDARD, NEARLINE, COLDLINE, ARCHIVE)
+	Location         string // Bucket location
+	MetadataCache    bool   // Cache object metadata
+	PresignedURLTTL  int    // Presigned URL validity in seconds
+}
+
+// GCSStorageService stores files in Google Cloud Storage
+type GCSStorageService struct {
+	config GCSStorageConfig
+	client *storage.Client
+	bucket *storage.BucketHandle
+}
+
+func NewGCSStorageService(ctx context.Context, cfg GCSStorageConfig) (*GCSStorageService, error) {
+	var client *storage.Client
+	var err error
+
+	// Create GCS client with credentials
+	if cfg.CredentialsFile != "" {
+		client, err = storage.NewClient(ctx, option.WithCredentialsFile(cfg.CredentialsFile))
+	} else if cfg.CredentialsJSON != "" {
+		client, err = storage.NewClient(ctx, option.WithCredentialsJSON([]byte(cfg.CredentialsJSON)))
+	} else {
+		client, err = storage.NewClient(ctx)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCS client: %w", err)
+	}
+
+	return &GCSStorageService{
+		config: cfg,
+		client: client,
+		bucket: client.Bucket(cfg.Bucket),
+	}, nil
+}
+
+func (s *GCSStorageService) Upload(
+	ctx context.Context,
+	path string,
+	reader io.Reader,
+	opts *storagepkg.UploadOptions,
+) (*storagepkg.StorageObject, error) {
+	object := s.bucket.Object(path)
+	writer := object.NewWriter(ctx)
+
+	// Set content type
+	if opts.ContentType != "" {
+		writer.ContentType = opts.ContentType
+	}
+
+	// Set metadata
+	if opts.Metadata != nil {
+		writer.Metadata = opts.Metadata
+	}
+
+	// Set cache control
+	if opts.CacheControl != "" {
+		writer.CacheControl = opts.CacheControl
+	}
+
+	// Copy data
+	if _, err := io.Copy(writer, reader); err != nil {
+		return nil, fmt.Errorf("failed to write to GCS: %w", err)
+	}
+
+	// Close writer
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close writer: %w", err)
+	}
+
+	// Get object attributes
+	attrs, err := object.Attrs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object attributes: %w", err)
+	}
+
+	// Generate presigned URL (requires additional setup with key)
+	// For now, return object metadata
+	return &storagepkg.StorageObject{
+		Name:         path,
+		Size:         attrs.Size,
+		ContentType:  attrs.ContentType,
+		ETag:         attrs.ETag,
+		LastModified: attrs.Updated,
+		Metadata:     attrs.Metadata,
+	}, nil
+}
+
+func (s *GCSStorageService) Download(ctx context.Context, path string) (io.ReadCloser, error) {
+	reader, err := s.bucket.Object(path).NewReader(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create reader: %w", err)
+	}
+	return reader, nil
+}
+
+func (s *GCSStorageService) Delete(ctx context.Context, path string) error {
+	return s.bucket.Object(path).Delete(ctx)
+}
+
+func (s *GCSStorageService) Exists(ctx context.Context, path string) (bool, error) {
+	_, err := s.bucket.Object(path).Attrs(ctx)
+	if err == storage.ErrObjectNotExist {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (s *GCSStorageService) GetObject(ctx context.Context, path string) (*storagepkg.StorageObject, error) {
+	attrs, err := s.bucket.Object(path).Attrs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object: %w", err)
+	}
+
+	return &storagepkg.StorageObject{
+		Name:         attrs.Name,
+		Size:         attrs.Size,
+		ContentType:  attrs.ContentType,
+		ETag:         attrs.ETag,
+		LastModified: attrs.Updated,
+		Metadata:     attrs.Metadata,
+	}, nil
+}
+
+func (s *GCSStorageService) ListObjects(
+	ctx context.Context,
+	prefix string,
+	recursive bool,
+) ([]*storagepkg.StorageObject, error) {
+	query := &storage.Query{Prefix: prefix}
+	if !recursive {
+		query.Delimiter = "/"
+	}
+
+	it := s.bucket.Objects(ctx, query)
+	var objects []*storagepkg.StorageObject
+
+	for {
+		attrs, err := it.Next()
+		if err == storage.ErrObjectNotExist {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to list objects: %w", err)
+		}
+
+		objects = append(objects, &storagepkg.StorageObject{
+			Name:         attrs.Name,
+			Size:         attrs.Size,
+			ContentType:  attrs.ContentType,
+			ETag:         attrs.ETag,
+			LastModified: attrs.Updated,
+			Metadata:     attrs.Metadata,
+		})
+	}
+
+	return objects, nil
+}
+
+// ... additional methods (Copy, Health, etc.)
+```
+
+### MinIO Configuration Example
+
+MinIO is an S3-compatible object storage server. To use MinIO with the S3 implementation:
+
+```yaml
+# config/config.yaml
+app:
+  storage:
+    s3:
+      region: "us-east-1"
+      bucket: "my-bucket"
+      access_key_id: "minioadmin"
+      secret_access_key: "minioadmin"
+      endpoint: "http://localhost:9000"  # MinIO endpoint
+      use_ssl: false
+      path_style: true                   # MinIO requires path-style URLs
+      presigned_url_ttl: 3600
+```
+
+Then use the S3 backend with MinIO configuration.
+
+### Integration with Modules
+
+Storage services can be injected into handlers and services for file upload/download operations:
+
+```go
+// internal/modules/product/handler/v1/handler_v1.product.go
+package handlerv1
+
+import (
+	"go-modular-monolith/internal/shared/storage"
+	sharedctx "go-modular-monolith/internal/shared/context"
+)
+
+type ProductHandler struct {
+	service   productdomain.ProductService
+	storage   storage.StorageService
+}
+
+// UploadProductImage handles image uploads
+func (h *ProductHandler) UploadProductImage(c sharedctx.Context) error {
+	productID := c.Param("product_id")
+	
+	// Get uploaded file from request
+	file, err := c.GetFile("image") // framework-specific
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "no file uploaded"})
+	}
+
+	// Upload to storage
+	storagePath := fmt.Sprintf("products/%s/%s", productID, file.Filename)
+	obj, err := h.storage.Upload(c.GetContext(), storagePath, file, &storage.UploadOptions{
+		ContentType: file.ContentType,
+		ACL:         "public-read",
+		Metadata: map[string]string{
+			"product_id": productID,
+			"uploaded_by": c.GetUserID(),
+		},
+	})
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": err.Error()})
+	}
+
+	// Return presigned URL or public URL
+	return c.JSON(200, map[string]string{
+		"url": obj.PresignedURL,
+		"size": fmt.Sprintf("%d", obj.Size),
+	})
+}
+
+// GetProductImage serves product images
+func (h *ProductHandler) GetProductImage(c sharedctx.Context) error {
+	productID := c.Param("product_id")
+	imageName := c.Param("image_name")
+	
+	storagePath := fmt.Sprintf("products/%s/%s", productID, imageName)
+	
+	// Download from storage
+	reader, err := h.storage.Download(c.GetContext(), storagePath)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "image not found"})
+	}
+	defer reader.Close()
+
+	// Stream response (framework-specific)
+	return c.Stream(200, "image/jpeg", reader)
+}
+```
+
+### Wiring Storage in Container
+
+```go
+// internal/app/core/container.go (excerpt)
+package core
+
+import (
+	"go-modular-monolith/internal/infrastructure/storage/local"
+	"go-modular-monolith/internal/infrastructure/storage/s3"
+	"go-modular-monolith/internal/infrastructure/storage/gcs"
+	"go-modular-monolith/internal/shared/storage"
+)
+
+func buildStorageService(config Config, featureFlags FeatureFlags) (storage.StorageService, error) {
+	if !featureFlags.Storage.Enabled {
+		return &storage.NoOpStorageService{}, nil
+	}
+
+	switch featureFlags.Storage.Backend {
+	case "local":
+		return local.NewLocalStorageService(local.LocalStorageConfig{
+			BasePath:          config.App.Storage.Local.BasePath,
+			MaxFileSize:       config.App.Storage.Local.MaxFileSize,
+			AllowPublicAccess: config.App.Storage.Local.AllowPublicAccess,
+			PublicURL:         config.App.Storage.Local.PublicURL,
+			CreateMissingDirs: true,
+		})
+
+	case "s3":
+		return s3.NewS3StorageService(s3.S3StorageConfig{
+			Region:              config.App.Storage.S3.Region,
+			Bucket:              config.App.Storage.S3.Bucket,
+			AccessKeyID:         config.App.Storage.S3.AccessKeyID,
+			SecretAccessKey:     config.App.Storage.S3.SecretAccessKey,
+			Endpoint:            config.App.Storage.S3.Endpoint,
+			UseSSL:              config.App.Storage.S3.UseSSL,
+			PathStyle:           config.App.Storage.S3.PathStyle,
+			PresignedURLTTL:     config.App.Storage.S3.PresignedURLTTL,
+			ServerSideEncryption: featureFlags.Storage.S3.EnableEncryption,
+			StorageClass:        featureFlags.Storage.S3.StorageClass,
+		})
+
+	case "gcs":
+		return gcs.NewGCSStorageService(context.Background(), gcs.GCSStorageConfig{
+			ProjectID:        config.App.Storage.GCS.ProjectID,
+			Bucket:           config.App.Storage.GCS.Bucket,
+			CredentialsFile:  config.App.Storage.GCS.CredentialsFile,
+			StorageClass:     featureFlags.Storage.GCS.StorageClass,
+			MetadataCache:    featureFlags.Storage.GCS.MetadataCache,
+		})
+
+	default:
+		return &storage.NoOpStorageService{}, nil
+	}
+}
+
+// In NewContainer, inject storage service
+container.StorageService = buildStorageService(config, featureFlags)
+```
+
+### Error Handling
+
+```go
+// internal/shared/storage/errors.go
+package storage
+
+import "fmt"
+
+type StorageErrorType string
+
+const (
+	ErrTypeNotFound      StorageErrorType = "STORAGE_NOT_FOUND"
+	ErrTypeSizeLimitExceeded = "STORAGE_SIZE_LIMIT_EXCEEDED"
+	ErrTypePermissionDenied  = "STORAGE_PERMISSION_DENIED"
+	ErrTypeInvalidPath       = "STORAGE_INVALID_PATH"
+	ErrTypeServiceError      = "STORAGE_SERVICE_ERROR"
+)
+
+type StorageError struct {
+	Type      StorageErrorType
+	Message   string
+	Err       error
+	HTTPCode  int
+}
+
+func (e *StorageError) Error() string {
+	return fmt.Sprintf("[%s] %s", e.Type, e.Message)
+}
+
+// Helper constructors
+func NotFound(path string) *StorageError {
+	return &StorageError{
+		Type:     ErrTypeNotFound,
+		Message:  fmt.Sprintf("object not found: %s", path),
+		HTTPCode: 404,
+	}
+}
+
+func SizeLimitExceeded(max int64) *StorageError {
+	return &StorageError{
+		Type:     ErrTypeSizeLimitExceeded,
+		Message:  fmt.Sprintf("file size exceeds limit of %d bytes", max),
+		HTTPCode: 413,
+	}
+}
+```
+
+### Best Practices
+
+1. **Validate File Types**: Check MIME types and extensions before upload
+   ```go
+   allowedTypes := map[string]bool{
+       "image/jpeg": true,
+       "image/png": true,
+       "image/gif": true,
+   }
+   
+   if !allowedTypes[opts.ContentType] {
+       return nil, fmt.Errorf("file type not allowed")
+   }
+   ```
+
+2. **Generate Safe Paths**: Use UUIDs to prevent directory traversal
+   ```go
+   storagePath := fmt.Sprintf("uploads/%s/%s", 
+       uuid.New().String(), 
+       filepath.Base(filename),
+   )
+   ```
+
+3. **Implement Cleanup**: Delete files after associated records are removed
+   ```go
+   if err := s.repo.Delete(ctx, id); err != nil {
+       return err
+   }
+   // Delete associated files
+   _ = s.storage.DeletePrefix(ctx, fmt.Sprintf("products/%s/", id))
+   ```
+
+4. **Use Async Uploads**: Enqueue large file operations as workers
+   ```go
+   // Enqueue export task (async)
+   s.workerClient.Enqueue(ctx, "export:data_export", map[string]interface{}{
+       "user_id": userID,
+       "format": "csv",
+   })
+   ```
+
+5. **Monitor Storage**: Health checks and metrics
+   ```go
+   if err := s.storage.Health(ctx); err != nil {
+       log.Error("storage service unhealthy", "error", err)
+   }
+   ```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| 403 Forbidden on S3 | Check IAM permissions and bucket policy |
+| MinIO connection failed | Verify endpoint URL and credentials |
+| Large file uploads timeout | Increase timeout and use multipart uploads |
+| Storage quota exceeded | Check bucket size limits and cleanup old files |
+| Presigned URLs not working | Verify TTL and backend time synchronization |
+
+---
 
 ### Development Guidelines
 

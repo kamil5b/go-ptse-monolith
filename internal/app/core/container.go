@@ -2,9 +2,11 @@ package core
 
 import (
 	// Shared packages
+	"context"
 	"go-modular-monolith/internal/shared/cache"
 	"go-modular-monolith/internal/shared/email"
 	"go-modular-monolith/internal/shared/events"
+	"go-modular-monolith/internal/shared/storage"
 	"go-modular-monolith/internal/shared/uow"
 
 	// Worker infrastructure
@@ -16,6 +18,12 @@ import (
 	// Email infrastructure
 	"go-modular-monolith/internal/infrastructure/email/mailgun"
 	"go-modular-monolith/internal/infrastructure/email/smtp"
+
+	// Storage infrastructure
+	"go-modular-monolith/internal/infrastructure/storage/gcs"
+	"go-modular-monolith/internal/infrastructure/storage/local"
+	"go-modular-monolith/internal/infrastructure/storage/noop"
+	"go-modular-monolith/internal/infrastructure/storage/s3"
 
 	// Product module
 	productDomain "go-modular-monolith/internal/modules/product/domain"
@@ -63,6 +71,9 @@ type Container struct {
 
 	// Email Service (shared)
 	EmailClient email.EmailService
+
+	// Storage Service (shared)
+	StorageService storage.StorageService
 
 	// Product module
 	ProductRepository productDomain.Repository
@@ -319,10 +330,66 @@ func NewContainer(
 		workerServer = worker.NewNoOpServer()
 	}
 
+	// Initialize storage service (before modules that depend on it)
+	var storageService storage.StorageService
+	if featureFlag.Storage.Enabled && featureFlag.Storage.Backend != "noop" && config != nil {
+		switch featureFlag.Storage.Backend {
+		case "local":
+			if svc, err := local.NewLocalStorageService(local.LocalStorageConfig{
+				BasePath:          config.App.Storage.Local.BasePath,
+				MaxFileSize:       config.App.Storage.Local.MaxFileSize,
+				AllowPublicAccess: config.App.Storage.Local.AllowPublicAccess,
+				PublicURL:         config.App.Storage.Local.PublicURL,
+				CreateMissingDirs: true,
+			}); err == nil {
+				storageService = svc
+			} else {
+				storageService = noop.NewNoOpStorageService()
+			}
+		case "s3", "s3-compatible":
+			if svc, err := s3.NewS3StorageService(s3.S3StorageConfig{
+				Region:               config.App.Storage.S3.Region,
+				Bucket:               config.App.Storage.S3.Bucket,
+				AccessKeyID:          config.App.Storage.S3.AccessKeyID,
+				SecretAccessKey:      config.App.Storage.S3.SecretAccessKey,
+				Endpoint:             config.App.Storage.S3.Endpoint,
+				UseSSL:               config.App.Storage.S3.UseSSL,
+				PathStyle:            config.App.Storage.S3.PathStyle,
+				PresignedURLTTL:      featureFlag.Storage.S3.PresignedURLTTL,
+				ServerSideEncryption: featureFlag.Storage.S3.EnableEncryption,
+				StorageClass:         featureFlag.Storage.S3.StorageClass,
+			}); err == nil {
+				storageService = svc
+			} else {
+				storageService = noop.NewNoOpStorageService()
+			}
+		case "gcs":
+			if svc, err := gcs.NewGCSStorageService(context.Background(), gcs.GCSStorageConfig{
+				ProjectID:       config.App.Storage.GCS.ProjectID,
+				Bucket:          config.App.Storage.GCS.Bucket,
+				CredentialsFile: config.App.Storage.GCS.CredentialsFile,
+				CredentialsJSON: config.App.Storage.GCS.CredentialsJSON,
+				StorageClass:    featureFlag.Storage.GCS.StorageClass,
+				Location:        config.App.Storage.GCS.Location,
+				MetadataCache:   featureFlag.Storage.GCS.MetadataCache,
+			}); err == nil {
+				storageService = svc
+			} else {
+				storageService = noop.NewNoOpStorageService()
+			}
+		default:
+			storageService = noop.NewNoOpStorageService()
+		}
+	} else {
+		// Use no-op implementation when storage is disabled
+		storageService = noop.NewNoOpStorageService()
+	}
+
 	return &Container{
 		Cache:             cacheInstance,
 		EventBus:          eventBus,
 		EmailClient:       emailService,
+		StorageService:    storageService,
 		ProductRepository: productRepository,
 		ProductService:    productService,
 		ProductHandler:    productHandler,

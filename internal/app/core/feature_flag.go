@@ -42,6 +42,24 @@ type EmailFeatureFlag struct {
 	Provider string `yaml:"provider"` // smtp, mailgun, noop
 }
 
+type StorageS3FeatureFlag struct {
+	EnableEncryption bool   `yaml:"enable_encryption"`
+	StorageClass     string `yaml:"storage_class"`
+	PresignedURLTTL  int    `yaml:"presigned_url_ttl"`
+}
+
+type StorageGCSFeatureFlag struct {
+	StorageClass  string `yaml:"storage_class"`
+	MetadataCache bool   `yaml:"metadata_cache"`
+}
+
+type StorageFeatureFlag struct {
+	Enabled bool                  `yaml:"enabled"`
+	Backend string                `yaml:"backend"` // local, s3, gcs, s3-compatible, noop
+	S3      StorageS3FeatureFlag  `yaml:"s3"`
+	GCS     StorageGCSFeatureFlag `yaml:"gcs"`
+}
+
 type FeatureFlag struct {
 	HTTPHandler string `yaml:"http_handler"` // echo, gin
 	Cache       string `yaml:"cache"`        // redis, memory, disable
@@ -51,6 +69,7 @@ type FeatureFlag struct {
 	Repository RepositoryFeatureFlag `yaml:"repository"`
 	Worker     WorkerFeatureFlag     `yaml:"worker"`
 	Email      EmailFeatureFlag      `yaml:"email"`
+	Storage    StorageFeatureFlag    `yaml:"storage"`
 }
 
 // LoadFeatureFlags loads feature flag configuration from a YAML file.
